@@ -15,6 +15,7 @@ afterEach(() => {
     )
     .forEach((n) => n.remove());
   vi.restoreAllMocks();
+  Reflect.deleteProperty(document, 'elementsFromPoint');
 });
 
 function mockRect(element: Element, rect: Partial<DOMRect>): void {
@@ -31,6 +32,13 @@ function mockRect(element: Element, rect: Partial<DOMRect>): void {
       height: rect.height ?? 0,
       toJSON: () => ({}),
     }),
+  });
+}
+
+function stubElementsFromPoint(hit: (x: number, y: number) => Element[]): void {
+  Object.defineProperty(document, 'elementsFromPoint', {
+    configurable: true,
+    value: hit,
   });
 }
 
@@ -226,6 +234,82 @@ describe('persistentExportToolbar', () => {
     await nextFrame();
 
     expect(handle.root.style.getPropertyValue('--gv-persistent-export-right')).toBe('252px');
+  });
+
+  it('moves left of unlabeled header controls rendered under the ChatGPT toolbar', async () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    const header = document.createElement('header');
+    const share = document.createElement('button');
+    const shareLabel = document.createElement('span');
+    share.appendChild(shareLabel);
+    header.appendChild(share);
+    document.body.appendChild(header);
+    mockRect(share, { top: 4, bottom: 48, left: 1129, right: 1181, width: 52, height: 44 });
+    stubElementsFromPoint((x, y) =>
+      y >= 4 && y <= 48 && x >= 1129 && x <= 1181 ? [shareLabel] : [header],
+    );
+
+    const handle = mountPersistentExportToolbar({
+      label: 'Export',
+      tooltip: 'Export chat history',
+      onClick: vi.fn(),
+    });
+    handle.root.setAttribute('data-gv-platform', 'chatgpt');
+    mockRect(handle.root, { top: 12, bottom: 48, width: 82, height: 36 });
+
+    await nextFrame();
+
+    expect(handle.root.style.getPropertyValue('--gv-persistent-export-right')).toBe('163px');
+    header.remove();
+  });
+
+  it('moves left of an unlabeled ChatGPT header control rendered after mount', async () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    const header = document.createElement('header');
+    document.body.appendChild(header);
+    let share: HTMLButtonElement | null = null;
+    stubElementsFromPoint((x, y) =>
+      share && y >= 4 && y <= 48 && x >= 1129 && x <= 1181 ? [share] : [header],
+    );
+
+    const handle = mountPersistentExportToolbar({
+      label: 'Export',
+      tooltip: 'Export chat history',
+      onClick: vi.fn(),
+    });
+    handle.root.setAttribute('data-gv-platform', 'chatgpt');
+    mockRect(handle.root, { top: 12, bottom: 48, width: 82, height: 36 });
+    await nextFrame();
+    expect(handle.root.style.getPropertyValue('--gv-persistent-export-right')).toBe('84px');
+
+    share = document.createElement('button');
+    mockRect(share, { top: 4, bottom: 48, left: 1129, right: 1181, width: 52, height: 44 });
+    header.appendChild(share);
+    await Promise.resolve();
+    await nextFrame();
+
+    expect(handle.root.style.getPropertyValue('--gv-persistent-export-right')).toBe('163px');
+    header.remove();
+  });
+
+  it('leaves the Gemini toolbar on its selector-based offset', async () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1280);
+    const control = document.createElement('button');
+    document.body.appendChild(control);
+    mockRect(control, { top: 4, bottom: 48, left: 1129, right: 1181, width: 52, height: 44 });
+    stubElementsFromPoint(() => [control]);
+
+    const handle = mountPersistentExportToolbar({
+      label: 'Export',
+      tooltip: 'Export chat history',
+      onClick: vi.fn(),
+    });
+    mockRect(handle.root, { top: 12, bottom: 48, width: 82, height: 36 });
+
+    await nextFrame();
+
+    expect(handle.root.style.getPropertyValue('--gv-persistent-export-right')).toBe('84px');
+    control.remove();
   });
 
   it('ignores full-width top-bar containers so the toolbar stays top-right', async () => {

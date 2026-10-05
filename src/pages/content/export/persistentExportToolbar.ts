@@ -38,6 +38,10 @@ const TOP_RIGHT_CONTROL_SELECTORS = [
  */
 const TOP_RIGHT_BROAD_SELECTORS = ['[aria-label*="pro" i]', '[aria-label*="advanced" i]'].join(',');
 const TOP_RIGHT_AVOIDANCE_SELECTORS = `${TOP_RIGHT_CONTROL_SELECTORS},${TOP_RIGHT_BROAD_SELECTORS}`;
+const INTERACTIVE_SELECTOR = 'button, a[href], [role="button"]';
+const ROW_PROBE_STEP_PX = 8;
+const MAX_ROW_SHIFTS = 4;
+const ROW_AVOIDANCE_PLATFORMS = new Set(['chatgpt']);
 
 type OwnedToolbarRoot = HTMLDivElement & { _gvOwner?: symbol };
 type ToolbarButton = HTMLButtonElement & { _gvOnClick?: () => void };
@@ -93,9 +97,53 @@ function measureTopRightControls(toolbarRoot: HTMLElement): TopRightMeasurement 
     watched.push(element as HTMLElement);
     if (left !== 'host') leftMost = Math.min(leftMost ?? window.innerWidth, left);
   }
-  if (leftMost === null) return { offset: DEFAULT_RIGHT_OFFSET_PX, watched, hidden };
-  const offset = Math.ceil(window.innerWidth - leftMost + TOP_RIGHT_GAP_PX);
-  return { offset: Math.max(DEFAULT_RIGHT_OFFSET_PX, offset), watched, hidden };
+  const offset =
+    leftMost === null
+      ? DEFAULT_RIGHT_OFFSET_PX
+      : Math.max(
+          DEFAULT_RIGHT_OFFSET_PX,
+          Math.ceil(window.innerWidth - leftMost + TOP_RIGHT_GAP_PX),
+        );
+  if (!usesRowAvoidance(toolbarRoot)) return { offset, watched, hidden };
+  return { offset: avoidControlsInRow(toolbarRoot, offset, watched), watched, hidden };
+}
+
+function usesRowAvoidance(toolbarRoot: HTMLElement): boolean {
+  return ROW_AVOIDANCE_PLATFORMS.has(toolbarRoot.dataset.gvPlatform ?? '');
+}
+
+// Host markup changes without notice, so also hit-test the toolbar's own row
+// for controls the selector list does not know about.
+function findControlUnderToolbar(toolbarRoot: HTMLElement, right: number): HTMLElement | null {
+  if (typeof document.elementsFromPoint !== 'function') return null;
+  const rect = toolbarRoot.getBoundingClientRect();
+  const y = rect.top + rect.height / 2;
+  const end = window.innerWidth - right;
+  for (let x = end - 1; x > end - rect.width; x -= ROW_PROBE_STEP_PX) {
+    const topmost = document
+      .elementsFromPoint(x, y)
+      .find((element) => !toolbarRoot.contains(element));
+    const control = topmost?.closest<HTMLElement>(INTERACTIVE_SELECTOR);
+    if (control) return control;
+  }
+  return null;
+}
+
+function avoidControlsInRow(
+  toolbarRoot: HTMLElement,
+  initialRight: number,
+  watched: HTMLElement[],
+): number {
+  let right = initialRight;
+  for (let i = 0; i < MAX_ROW_SHIFTS; i++) {
+    const control = findControlUnderToolbar(toolbarRoot, right);
+    if (!control) break;
+    const left = control.getBoundingClientRect().left;
+    if (left < window.innerWidth * TOP_RIGHT_MIN_LEFT_RATIO) break;
+    watched.push(control);
+    right = Math.ceil(window.innerWidth - left + TOP_RIGHT_GAP_PX);
+  }
+  return right;
 }
 
 /** The top-right elements found by the last measurement, for filtering mutations. */
@@ -136,11 +184,9 @@ function isInsideWatchedElement(node: Node, measured: MeasuredControls): boolean
   return false;
 }
 
-function containsAvoidedControl(node: Node): boolean {
+function containsMatch(node: Node, selector: string): boolean {
   return (
-    node instanceof Element &&
-    (node.matches(TOP_RIGHT_AVOIDANCE_SELECTORS) ||
-      node.querySelector(TOP_RIGHT_AVOIDANCE_SELECTORS) !== null)
+    node instanceof Element && (node.matches(selector) || node.querySelector(selector) !== null)
   );
 }
 
@@ -157,6 +203,10 @@ function mutationsMayMoveTopRightControls(
 ): boolean {
   // Let the next update notice the detached toolbar and tear itself down.
   if (!toolbarRoot.isConnected) return true;
+  // Row avoidance hit-tests unlabeled controls, so any new one may land under the toolbar.
+  const addedSelector = usesRowAvoidance(toolbarRoot)
+    ? `${TOP_RIGHT_AVOIDANCE_SELECTORS},${INTERACTIVE_SELECTOR}`
+    : TOP_RIGHT_AVOIDANCE_SELECTORS;
   for (const mutation of mutations) {
     const target = mutation.target;
     // The toolbar's own offset writes and label updates.
@@ -170,7 +220,7 @@ function mutationsMayMoveTopRightControls(
     }
     if (isInsideWatchedElement(target, measured)) return true;
     for (const node of Array.from(mutation.addedNodes)) {
-      if (containsAvoidedControl(node)) return true;
+      if (containsMatch(node, addedSelector)) return true;
     }
     for (const node of Array.from(mutation.removedNodes)) {
       if (measured.watchedAndAncestors.has(node)) return true;
