@@ -96,7 +96,7 @@ describe('floating panel parity with the sidebar tree', () => {
     ).toBeTruthy();
 
     click(requireElement(row, `.${FLOATING_PANEL_CLASS}__icon-button--star`));
-    expect(onToggleStar).toHaveBeenCalledWith(ROOT_CONVERSATIONS_ID, 'root-conv');
+    expect(onToggleStar).toHaveBeenCalledWith('root-conv', false);
   });
 
   it('moves a root conversation into a folder by drag', () => {

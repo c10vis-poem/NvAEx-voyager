@@ -2637,10 +2637,6 @@
     "message": "Добавить текущий диалог сюда",
     "description": "Floating folder panel folder menu item that files the open conversation into that folder"
   },
-  "chatgptFoldersAddCurrent": {
-    "message": "Добавить текущий диалог",
-    "description": "ChatGPT folder panel header button that files the open conversation at the top level"
-  },
   "chatgptFoldersHint": {
     "message": "Чтобы добавить диалог: откройте его и нажмите кнопку закладки или щёлкните папку правой кнопкой.",
     "description": "ChatGPT folder panel hint explaining how to file a conversation"

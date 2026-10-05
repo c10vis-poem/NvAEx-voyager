@@ -1,5 +1,9 @@
 import type { FolderCommands } from '@/features/folder/commands/folderCommands';
 import {
+  type ConversationIdentity,
+  readConversationStars,
+} from '@/features/folder/model/conversationStars';
+import {
   type ConversationSortMode,
   sortConversationsByPriority,
   sortFolders,
@@ -19,6 +23,8 @@ export type SidebarDropContext = {
   rootBucketId: string;
   feedback: Pick<FolderFeedback, 'showNotification'>;
   sortMode: () => ConversationSortMode;
+  /** How the site names one conversation across folders, which the tree's stars follow. */
+  conversationIdentity: ConversationIdentity;
   /** After any drop that read a payload: ends the multi-select a drag carried. */
   finish?: () => void;
 };
@@ -44,18 +50,22 @@ function folderInsertIndex(
   return { parentId: target.parentId ?? '__root__', index };
 }
 
-/** The insert index of a drop beside a chat, within its starred or unstarred group. */
+/** The insert index of a drop beside a chat, within its starred or unstarred group as shown. */
 function conversationInsertIndex(
-  store: SidebarDropContext['store'],
+  context: SidebarDropContext,
   sortMode: ConversationSortMode,
   placement: Extract<DropPlacement, { kind: 'conversation' }>,
 ): number {
+  const { data } = context.store;
+  const starred = readConversationStars(data, context.conversationIdentity);
   const sorted = sortConversationsByPriority(
-    store.data.folderContents[placement.bucketId] ?? [],
+    data.folderContents[placement.bucketId] ?? [],
     sortMode,
+    starred,
   );
   const target = sorted.find((conv) => conv.conversationId === placement.conversationId);
-  const group = sorted.filter((conv) => !!conv.starred === !!target?.starred);
+  const targetStarred = !!target && starred(target);
+  const group = sorted.filter((conv) => starred(conv) === targetStarred);
   const at = group.findIndex((conv) => conv.conversationId === placement.conversationId);
   if (at < 0) return group.length;
   return placement.position === 'before' ? at : at + 1;
@@ -103,7 +113,7 @@ export function applySidebarDrop(
       target: folderId,
       payload: dragData,
       ...(placement?.kind === 'conversation' && sortMode === 'manual'
-        ? { index: conversationInsertIndex(store, sortMode, placement) }
+        ? { index: conversationInsertIndex(context, sortMode, placement) }
         : {}),
     });
   } catch (error) {

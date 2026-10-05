@@ -2637,10 +2637,6 @@
     "message": "현재 대화를 여기에 추가",
     "description": "Floating folder panel folder menu item that files the open conversation into that folder"
   },
-  "chatgptFoldersAddCurrent": {
-    "message": "현재 대화 추가",
-    "description": "ChatGPT folder panel header button that files the open conversation at the top level"
-  },
   "chatgptFoldersHint": {
     "message": "대화를 정리하려면: 대화를 연 다음 북마크 버튼을 누르거나 폴더를 우클릭하세요.",
     "description": "ChatGPT folder panel hint explaining how to file a conversation"

@@ -3,7 +3,7 @@ import browser from 'webextension-polyfill';
 
 import { StorageKeys } from '@/core/types/common';
 import { getCurrentLanguage, initI18n } from '@/utils/i18n';
-import type { AppLanguage } from '@/utils/language';
+import { localeFromLanguage } from '@/utils/language';
 
 import { watchRouteChanges } from '../utils/routeWatcher';
 import { formatResetLabel, hydrateUsageResetEpochs, scrapeUsageFromDocument } from './usageParsing';
@@ -18,13 +18,6 @@ import {
   usageCacheKeyForAccount,
 } from './usageSnapshot';
 import type { UsageMetric, UsageSnapshot } from './usageSnapshot';
-
-/** Map a Voyager language to a BCP-47 tag for Intl date formatting. */
-function localeFromLanguage(lang: AppLanguage): string {
-  if (lang === 'zh') return 'zh-CN';
-  if (lang === 'zh_TW') return 'zh-TW';
-  return lang;
-}
 
 const SCRAPE_DEBOUNCE_MS = 300;
 

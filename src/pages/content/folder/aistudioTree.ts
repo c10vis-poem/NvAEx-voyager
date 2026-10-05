@@ -3,6 +3,7 @@ import type { FolderCommands } from '@/features/folder/commands/folderCommands';
 import { AISTUDIO_ROOT_BUCKET_ID } from '@/features/folder/constants';
 import { ownBucket, removeFolder, setBucket } from '@/features/folder/model/folderData';
 import { placeConversations } from '@/features/folder/model/placeConversations';
+import { FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 
 import panelCss from './floatingPanel.css?raw';
 import {
@@ -42,6 +43,7 @@ const SITE: TreeSiteOptions = {
   rootSection: { labelKey: 'folder_uncategorized' },
   folderMenuButton: { labelKey: 'folder_settings' },
   folderBodyDrop: true,
+  conversationIdentity: FOLDER_SITE_POLICIES.aistudio,
 };
 
 /**
@@ -209,27 +211,6 @@ export function toggleFolderExpanded(data: FolderData, folderId: string): boolea
   return true;
 }
 
-function findConversation(
-  data: FolderData,
-  folderId: string,
-  conversationId: string,
-): ConversationReference | undefined {
-  return ownBucket(data.folderContents, folderId)?.find(
-    (conversation) => conversation.conversationId === conversationId,
-  );
-}
-
-export function toggleConversationStar(
-  data: FolderData,
-  folderId: string,
-  conversationId: string,
-): boolean {
-  const conversation = findConversation(data, folderId, conversationId);
-  if (!conversation) return false;
-  conversation.starred = !conversation.starred;
-  return true;
-}
-
 export function removeConversation(
   data: FolderData,
   folderId: string,
@@ -309,13 +290,8 @@ export function aistudioTreeActions(host: AIStudioTreeHost): TreeActions {
       run({ kind: 'removeConversations', folderId, ids: [conversationId] }),
     confirmFolderRemoval: host.confirmFolderRemoval,
     confirmConversationRemoval: host.confirmConversationRemoval,
-    onToggleStar: (folderId, conversationId) =>
-      run({
-        kind: 'setConversationStarred',
-        conversationId,
-        starred: !findConversation(host.data(), folderId, conversationId)?.starred,
-        scope: { folderId },
-      }),
+    onToggleStar: (conversationId, starred) =>
+      run({ kind: 'setConversationStarred', conversationId, starred, scope: 'everywhere' }),
     onToggleFolderPinned: (folderId) =>
       run({ kind: 'setFolderPinned', folderId, pinned: !folder(folderId)?.pinned }),
     onToggleFolderExpanded: (folderId) =>

@@ -96,12 +96,19 @@
 }
 
 /* Rows take ChatGPT's row height and radius tokens. One nesting step is the
- * chevron and its gap, so a child's chevron sits under its parent's folder icon. */
+ * chevron and its gap, so a child's chevron sits under its parent's folder icon;
+ * the folder indent setting (-8px by default) widens it, as on Gemini. */
 :host(.gv-chatgpt-folder-section),
 :host(.gv-folder-tree-popover-layer) {
   --gv-chatgpt-folder-section__row-height: var(--height-token-row, 36px);
   --gv-chatgpt-folder-section__row-radius: var(--radius-lg, 10px);
-  --gv-tree-step: 24px;
+  --gv-tree-step: calc(32px + var(--gv-folder-indent, -8px));
+}
+
+/* The folder spacing setting, as a gap below each row; none until it is set.
+ * Inside the row shell, so the virtualizer measures it. */
+:host(.gv-chatgpt-folder-section[data-gv-scheme]) .gv-floating-folder-panel__tree-row {
+  padding-block-end: var(--gv-folder-row-gap, 0px);
 }
 
 /* ─── Header: one of ChatGPT's section headings ────────────────────────── */
@@ -361,11 +368,12 @@
   color: var(--gv-floating-folder-panel__text);
 }
 
+/* ChatGPT's 14px rows, until the folder font size setting picks another. */
 :host(.gv-chatgpt-folder-section[data-gv-scheme]) .gv-floating-folder-panel__folder-name,
 :host(.gv-chatgpt-folder-section[data-gv-scheme]) .gv-floating-folder-panel__conv-title {
-  font-size: 14px;
+  font-size: var(--gv-folder-item-font-size, 14px);
   font-weight: 400;
-  line-height: 20px;
+  line-height: var(--gv-folder-item-line-height, 20px);
 }
 
 :host(.gv-chatgpt-folder-section[data-gv-scheme]) .gv-floating-folder-panel__caret {
@@ -429,7 +437,12 @@
 /* A conversation's title lines up with its folder's name. */
 :host(.gv-chatgpt-folder-section[data-gv-scheme]) .gv-floating-folder-panel__conv-title {
   margin-inline-start: 34px;
-  padding-block: calc((var(--gv-chatgpt-folder-section__row-height) - 20px) / 2);
+  padding-block: max(
+    0px,
+    calc(
+      (var(--gv-chatgpt-folder-section__row-height) - var(--gv-folder-item-line-height, 20px)) / 2
+    )
+  );
 }
 
 /* Tree guides run under each enclosing folder's chevron (row start + 18px). */
@@ -473,6 +486,46 @@
 :host(.gv-chatgpt-folder-section[data-gv-scheme]) .gv-floating-folder-panel__empty-label {
   font-size: 14px;
   line-height: 20px;
+}
+
+/* ─── Activity: the shared list on the rows' column, in ChatGPT's colours ─ */
+/* Titles start 16px into the section, under the header's; two-line rows keep
+ * the list's own height, in the page's font and row weight. */
+:host(.gv-chatgpt-folder-section[data-gv-scheme]) .gv-folder-activity-list {
+  --gv-folder-activity-text: var(--gv-floating-folder-panel__text);
+  --gv-folder-activity-muted: var(--gv-chatgpt-folder-section__heading);
+  --gv-folder-activity-hover: var(--gv-floating-folder-panel__surface-hover);
+  --gv-folder-list-edge: 6px;
+  --gv-folder-activity-row-inset: 10px;
+}
+
+:host(.gv-chatgpt-folder-section)
+  :is(
+    .gv-folder-activity-heading,
+    .gv-folder-activity-text .gv-conversation-title,
+    .gv-folder-activity-context,
+    .gv-folder-activity-time,
+    .gv-folder-activity-empty
+  ) {
+  font-family: inherit;
+}
+
+/* Activity titles follow the font size setting too, as on Gemini. */
+:host(.gv-chatgpt-folder-section) .gv-folder-activity-text .gv-conversation-title {
+  font-size: var(--gv-folder-item-font-size, 14px);
+  font-weight: 400;
+  line-height: var(--gv-folder-item-line-height, 20px);
+}
+
+:host(.gv-chatgpt-folder-section) .gv-folder-activity-item {
+  border-radius: var(--gv-chatgpt-folder-section__row-radius);
+}
+
+:host(.gv-chatgpt-folder-section) .gv-folder-activity-empty {
+  padding-inline: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  opacity: 1;
 }
 
 /* ─── Folder menu: ChatGPT's menu shape, in the page's font ────────────── */

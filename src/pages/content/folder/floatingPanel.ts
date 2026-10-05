@@ -1,6 +1,8 @@
 import { CLOUD_SYNC_PATH, CLOUD_UPLOAD_PATH } from '@/core/icons/cloudSyncPaths';
 import { ROOT_CONVERSATIONS_ID } from '@/features/folder/constants';
+import type { ConversationIdentity } from '@/features/folder/model/conversationStars';
 import type { ConversationSortMode } from '@/features/folder/model/folderData';
+import { FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 
 import { clearOfPromptTrigger } from '../prompt/triggerClearance';
 import panelCss from './floatingPanel.css?raw';
@@ -34,6 +36,8 @@ export type MountArgs = TreeActions & {
   hintKeys?: readonly string[];
   /** Defaults to Gemini's root bucket. */
   rootBucketId?: string;
+  /** Which rows are one conversation, sharing one star; defaults to Gemini's. */
+  conversationIdentity?: ConversationIdentity;
   dataReady?: boolean;
   conversationSortMode?: ConversationSortMode;
   storedPos?: FloatingPanelPos | null;
@@ -198,6 +202,7 @@ export function mountFloatingPanel({
   dataReady = true,
   conversationSortMode = 'manual',
   rootBucketId = ROOT_CONVERSATIONS_ID,
+  conversationIdentity = FOLDER_SITE_POLICIES.gemini,
   storedPos,
   storedSize,
   onPosChange,
@@ -420,6 +425,7 @@ export function mountFloatingPanel({
     rootBucketId,
     conversationSortMode,
     actions,
+    site: { conversationIdentity },
   });
 
   const onResize = () => {

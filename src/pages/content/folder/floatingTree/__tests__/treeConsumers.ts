@@ -103,6 +103,8 @@ function mountChatGpt(data: FolderData, actions: TreeActions): MountedTree {
     data,
     rootBucketId: ROOT_CONVERSATIONS_ID,
     actions,
+    transfer: { import: () => {}, export: () => {} },
+    cloud: { upload: () => {}, sync: () => {} },
     prefs: DEFAULT_SECTION_PREFS,
     onPrefsChange: () => {},
   });

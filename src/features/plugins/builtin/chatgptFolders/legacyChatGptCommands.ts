@@ -14,6 +14,7 @@ import {
   failed,
   legacyOutcome,
 } from '@/features/folder/commands/folderCommands';
+import { readConversationStars } from '@/features/folder/model/conversationStars';
 import { cloneFolderData, ownBucket } from '@/features/folder/model/folderData';
 import { applyFolderOp } from '@/features/folder/owner/applyFolderOp';
 import { type ConversationSeed, rejected } from '@/features/folder/owner/folderOps';
@@ -105,7 +106,14 @@ export function createLegacyChatGptCommands(store: ChatGptFolderStore): FolderCo
     },
     addConversations: ({ target, seeds, via }) => {
       const placement = FOLDER_SITE_POLICIES.chatgpt.addPlacement(via);
-      const results = seeds.map((seed) => store.addConversation(target, recordOf(seed), placement));
+      // A star is the conversation's: filing a chat starred in another folder keeps it, so
+      // removing that folder's copy later does not unstar the chat.
+      const starred = readConversationStars(store.data, FOLDER_SITE_POLICIES.chatgpt);
+      const results = seeds.map((seed) => {
+        const record = recordOf(seed);
+        if (starred(record)) record.starred = true;
+        return store.addConversation(target, record, placement);
+      });
       const best = ADD_RANK.find((rank) => results.includes(rank)) ?? 'closed';
       return ADD_OUTCOMES[best];
     },
@@ -129,13 +137,7 @@ export function createLegacyChatGptCommands(store: ChatGptFolderStore): FolderCo
     },
     removeConversations: ({ folderId, ids }) =>
       edit(() => ids.forEach((id) => store.removeConversation(folderId, id))),
-    setConversationStarred: ({ conversationId, starred, scope }) => {
-      if (scope === 'everywhere') return unsupported();
-      const record = recordIn(scope.folderId, conversationId);
-      return toggleIf(record && !!record.starred !== starred, () =>
-        store.toggleStar(scope.folderId, conversationId),
-      );
-    },
+    setConversationStarred: (body) => applyOp(body),
     syncNativeTitles: ({ entries }) => {
       const titles = new Map(entries.map((e) => [bareConversationId(e.conversationId), e.title]));
       const editable = store.ready;
@@ -155,7 +157,7 @@ export function createLegacyChatGptCommands(store: ChatGptFolderStore): FolderCo
     restoreNativeTitle: (body) => applyOp(body),
     setConversationGem: unsupported,
     markConversationOpened: (body) => applyOp(body, 'opened'),
-    setConversationActivity: unsupported,
+    setConversationActivity: (body) => applyOp(body, 'activity'),
   };
 
   async function importFile(payload: unknown): Promise<EditOutcome> {

@@ -6,6 +6,7 @@ import { StorageKeys } from '@/core/types/common';
 import type { FolderData } from '@/core/types/folder';
 import { ROOT_CONVERSATIONS_ID } from '@/features/folder/constants';
 import { PluginScope } from '@/features/plugins/runtime/pluginScope';
+import { openMenu } from '@/pages/content/folder/floatingTree/__tests__/treeDriver';
 import { confirmDriver } from '@/tests/confirmDriver';
 import { toastDriver } from '@/tests/toastDriver';
 import { initI18n } from '@/utils/i18n';
@@ -27,6 +28,13 @@ vi.mock('webextension-polyfill', () => ({
 const A = '68a1f2c3-0b4d-8001-9e2f-1a2b3c4d5e6f';
 const PANEL = '.gv-floating-folder-panel';
 const FAB = '.gv-floating-fab';
+/** One empty ChatGPT folder to file the open chat into. */
+const TRIPS: FolderData = {
+  folders: [
+    { id: 'trips', name: 'Trips', parentId: null, isExpanded: true, createdAt: 1, updatedAt: 1 },
+  ],
+  folderContents: { trips: [], [ROOT_CONVERSATIONS_ID]: [] },
+};
 const GEMINI_DATA: FolderData = {
   folders: [
     { id: 'g1', name: 'Gemini', parentId: null, isExpanded: true, createdAt: 1, updatedAt: 1 },
@@ -125,6 +133,16 @@ function press(element: Element, key: string): void {
   element.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 }
 
+/** "Add current conversation here" from a folder's menu in the panel. */
+function addCurrentHere(folderId: string): void {
+  shadow()
+    .querySelector(`[data-folder-id="${folderId}"]`)!
+    .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  [...openMenu()!.querySelectorAll<HTMLElement>('button')]
+    .find((button) => button.textContent?.includes('Add current conversation here'))!
+    .click();
+}
+
 async function activate(): Promise<void> {
   await activateChatGptFolders(scope);
   await settle(20);
@@ -142,17 +160,25 @@ describe('ChatGPT folders plugin', () => {
     expect(header.map((button) => button.getAttribute('aria-label'))).toEqual([
       expect.any(String),
       expect.any(String),
-      'Add current conversation',
       'Import folders',
       'Export folders',
-      expect.any(String),
+      'Create folder',
       expect.any(String),
     ]);
-    shadow().querySelector<HTMLButtonElement>('[class*="icon-button--add-current"]')!.click();
+    shadow().querySelector<HTMLButtonElement>('[class*="icon-button--create"]')!.click();
+    const input = shadow().querySelector<HTMLInputElement>(
+      '.gv-floating-folder-panel__inline-input',
+    )!;
+    input.value = 'Trips';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await settle(20);
+    const created = (memory.values.local.get(StorageKeys.FOLDER_DATA_CHATGPT) as FolderData)
+      .folders[0];
+    addCurrentHere(created.id);
     await settle(20);
 
     const bucket = memory.values.local.get(StorageKeys.FOLDER_DATA_CHATGPT) as FolderData;
-    expect(bucket.folderContents[ROOT_CONVERSATIONS_ID]).toEqual([
+    expect(bucket.folderContents[created.id]).toEqual([
       expect.objectContaining({
         conversationId: `chatgpt:conv:${A}`,
         title: 'Trip plan',
@@ -175,11 +201,12 @@ describe('ChatGPT folders plugin', () => {
 
   it('refuses to file a temporary chat that the URL does not mark', async () => {
     memory.values.local.set(StorageKeys.CHATGPT_FOLDER_PANEL, { open: true });
+    memory.values.local.set(StorageKeys.FOLDER_DATA_CHATGPT, structuredClone(TRIPS));
     document.body.innerHTML =
       '<button data-testid="temporary-chat-toggle" aria-pressed="true"></button>';
     await activate();
 
-    shadow().querySelector<HTMLButtonElement>('[class*="icon-button--add-current"]')!.click();
+    addCurrentHere('trips');
     await settle(20);
 
     expect(toastDriver.messages()).toEqual([
@@ -290,15 +317,17 @@ describe('ChatGPT folders plugin', () => {
 
   it('leaves nothing behind when turned off', async () => {
     memory.values.local.set(StorageKeys.CHATGPT_FOLDER_PANEL, { open: true });
+    memory.values.local.set(StorageKeys.FOLDER_DATA_CHATGPT, structuredClone(TRIPS));
     const listeners = trackPageListeners();
     const storageListeners = memory.listeners.size;
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
     try {
       await activate();
-      shadow().querySelector<HTMLButtonElement>('[class*="icon-button--add-current"]')!.click();
+      addCurrentHere('trips');
       await vi.advanceTimersByTimeAsync(0);
       expect(document.querySelector(FAB)).not.toBeNull();
-      expect(memory.listeners.size).toBe(storageListeners + 1);
+      // The store's, and the display settings the section follows.
+      expect(memory.listeners.size).toBe(storageListeners + 2);
 
       await scope.dispose();
 

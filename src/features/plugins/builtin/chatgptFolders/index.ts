@@ -5,19 +5,15 @@
  * shared FolderRepository with ChatGPT's own bucket. Everything this plugin
  * creates is registered on its PluginScope, so turning it off leaves nothing behind.
  */
-import {
-  createBookmarkPlusIcon,
-  createDownloadIcon,
-  createUploadIcon,
-} from '@/core/icons/folderIcons';
+import { DOWNLOAD_PATH, UPLOAD_PATH } from '@/core/icons/transferPaths';
 import type { ConversationReference } from '@/core/types/folder';
 import { createToaster } from '@/core/ui/toast/toaster';
 import type { ToastTone } from '@/core/ui/toast/types';
 import type { EditOutcome, FolderCommands } from '@/features/folder/commands/folderCommands';
-import type { AddVia } from '@/features/folder/owner/folderOwnerPolicy';
+import { type AddVia, FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 import { FolderImportExportService } from '@/features/folder/services/FolderImportExportService';
 import type { PluginScope } from '@/features/plugins/runtime/pluginScope';
-import type { PluginSettings } from '@/features/plugins/types';
+import type { PluginSettings, SiteAdapter } from '@/features/plugins/types';
 import { FolderSelection } from '@/pages/content/folder/FolderSelection';
 import { createCommandTreeActions } from '@/pages/content/folder/commandTreeActions';
 import { mountFloatingFab, unmountFloatingFab } from '@/pages/content/folder/floatingModeFab';
@@ -29,7 +25,6 @@ import {
 } from '@/pages/content/folder/floatingTree/dropTargets';
 import type { TreeActions } from '@/pages/content/folder/floatingTree/shared';
 import { createFolderDialogs } from '@/pages/content/folder/folderDialogs';
-import { cloudMenuAction } from '@/pages/content/folder/folderHeader/folderHeader';
 import {
   type SidebarDropContext,
   acceptsSidebarDrag,
@@ -48,13 +43,10 @@ import {
 } from './chatgptCloudSync';
 import { ChatGptFolderGuide } from './chatgptFolderGuide';
 import { type FolderPickerHandle, openFolderPicker } from './chatgptFolderPicker';
-import {
-  ChatGptFolderSection,
-  SECTION_ICON_SIZE,
-  sectionToolbarIcon,
-} from './chatgptFolderSection';
+import { ChatGptFolderSection, sectionToolbarIcon } from './chatgptFolderSection';
 import { ChatGptHideFiled, HIDE_FILED_SETTING } from './chatgptHideFiled';
 import { bareConversationId, readChatGptConversation } from './chatgptIdentity';
+import { type ChatGptTurnSelectors, trackChatGptLastTurn } from './chatgptLastTurn';
 import { ChatGptMoveMenu, MOVE_ENTRY_ATTR } from './chatgptMoveMenu';
 import { openNativeRename } from './chatgptNativeRename';
 import { openChatGptConversation, readCurrentConversation } from './chatgptPage';
@@ -63,7 +55,6 @@ import { findChatGptSidebar } from './chatgptSidebarDom';
 import { ChatGptSidebarWatcher } from './chatgptSidebarWatcher';
 import { ChatGptTitleSync } from './chatgptTitleSync';
 import { CHATGPT_FOLDER_CONFIG } from './config';
-import { BOOKMARK_ADD_PATH, DOWNLOAD_PATH, UPLOAD_PATH } from './icons';
 import { createLegacyChatGptCommands } from './legacyChatGptCommands';
 import { type ChatGptFolderPanelPrefs, loadPanelPrefs, savePanelPrefs } from './panelPrefs';
 import { type ChatGptFolderSectionPrefs, loadSectionPrefs, saveSectionPrefs } from './sectionPrefs';
@@ -117,8 +108,11 @@ class ChatGptFoldersView {
     private readonly renameNative: (conversation: ConversationReference) => void,
   ) {}
 
-  /** Mounts the sidebar section, which owns `sectionPrefs` from here on. */
-  start(sectionPrefs: ChatGptFolderSectionPrefs): void {
+  /**
+   * Mounts the sidebar section, which owns `sectionPrefs` from here on. It
+   * offers the Activity view only when the page records send times (`activity`).
+   */
+  start(sectionPrefs: ChatGptFolderSectionPrefs, activity: boolean): void {
     this.scope.child(this.toaster, 'chatgpt-folders:toasts');
     this.scope.effect(() => () => this.showFloatingEntry(false), 'chatgpt-folders:fab');
     this.scope.effect(
@@ -158,6 +152,7 @@ class ChatGptFoldersView {
         rootBucketId,
         feedback,
         sortMode: () => section.sortMode,
+        conversationIdentity: FOLDER_SITE_POLICIES.chatgpt,
         finish: () => selection.finishDrop(),
       };
       const section: ChatGptFolderSection = new ChatGptFolderSection({
@@ -173,38 +168,31 @@ class ChatGptFoldersView {
         },
         prefs: sectionPrefs,
         onPrefsChange: (prefs) => void saveSectionPrefs(prefs),
+        activity: activity
+          ? {
+              commands: this.commands,
+              navigation: {
+                getConversationHref: (conversation) =>
+                  readChatGptConversation(conversation.url)?.url ?? '',
+                navigate: (conversation) => void openChatGptConversation(conversation),
+              },
+              dialogs: this.dialogs,
+              onRenameNative: this.renameNative,
+            }
+          : undefined,
         selection: {
           toolbar: selection.createMultiSelectIndicator(),
           isConversationSelected: (conversation, bucketId) =>
             selection.isFolderConversationSelected(conversation.conversationId, bucketId),
         },
-        headerActions: [
-          {
-            className: 'gv-chatgpt-folder-section__add-current',
-            labelKey: 'chatgptFoldersAddCurrent',
-            icon: () => createBookmarkPlusIcon(SECTION_ICON_SIZE),
-            onClick: () => this.addCurrent(CHATGPT_FOLDER_CONFIG.rootBucketId),
-          },
-          {
-            className: 'gv-chatgpt-folder-section__import',
-            labelKey: 'folder_import',
-            icon: () => createUploadIcon(SECTION_ICON_SIZE),
-            onClick: () => this.pickImportFile(),
-          },
-          {
-            className: 'gv-chatgpt-folder-section__export',
-            labelKey: 'folder_export',
-            icon: () => createDownloadIcon(SECTION_ICON_SIZE),
-            onClick: () => this.exportFolders(),
-          },
-          cloudMenuAction(
-            {
-              upload: () => void uploadChatGptFolders(this.cloudHost),
-              sync: () => void syncChatGptFolders(this.cloudHost),
-            },
-            { className: 'gv-chatgpt-folder-section__cloud' },
-          ),
-        ],
+        transfer: {
+          import: () => this.pickImportFile(),
+          export: () => this.exportFolders(),
+        },
+        cloud: {
+          upload: () => void uploadChatGptFolders(this.cloudHost),
+          sync: () => void syncChatGptFolders(this.cloudHost),
+        },
       });
       section.setDataReady(this.store.ready);
       // The heading files at the root, as Gemini's does: tree drags, and ChatGPT's row drags.
@@ -235,7 +223,7 @@ class ChatGptFoldersView {
     // The panel keeps the manual order, which an open does not change.
     this.panel?.update(data);
     this.panel?.setDataReady(ready);
-    if (change === 'opened') this.section?.updateOpened(data);
+    if (change === 'opened' || change === 'activity') this.section?.updateOpened(data);
     else this.section?.update(data);
     this.section?.setDataReady(ready);
   }
@@ -369,17 +357,12 @@ class ChatGptFoldersView {
     this.panel = mountFloatingPanel({
       data: store.data,
       rootBucketId: CHATGPT_FOLDER_CONFIG.rootBucketId,
+      conversationIdentity: FOLDER_SITE_POLICIES.chatgpt,
       dataReady: store.ready,
       hintKeys: HINT_KEYS,
       onCloudUpload: () => void uploadChatGptFolders(this.cloudHost),
       onCloudSync: () => void syncChatGptFolders(this.cloudHost),
       headerActions: [
-        {
-          modifier: 'add-current',
-          labelKey: 'chatgptFoldersAddCurrent',
-          iconPath: BOOKMARK_ADD_PATH,
-          onClick: () => this.addCurrent(CHATGPT_FOLDER_CONFIG.rootBucketId),
-        },
         {
           modifier: 'import',
           labelKey: 'folder_import',
@@ -500,9 +483,17 @@ function importNotice(outcome: EditOutcome): Notice | null {
   }
 }
 
+/** The page's selectors for a user message and the prompt, when its adapter names both. */
+function turnSelectorsOf(adapter: SiteAdapter | null): ChatGptTurnSelectors | null {
+  const userTurn = adapter?.selectors.userTurn;
+  const composer = adapter?.selectors.composer;
+  return userTurn && composer ? { userTurn, composer } : null;
+}
+
 export async function activateChatGptFolders(
   scope: PluginScope,
   settings: PluginSettings = {},
+  adapter: SiteAdapter | null = null,
 ): Promise<void> {
   await initI18n();
   if (scope.isDisposed) return;
@@ -528,7 +519,34 @@ export async function activateChatGptFolders(
   const view = new ChatGptFoldersView(scope, store, commands, prefs, (c) => {
     void renameNative(c);
   });
-  view.start(sectionPrefs);
+  const turnSelectors = turnSelectorsOf(adapter);
+  view.start(sectionPrefs, turnSelectors !== null);
+  if (turnSelectors) {
+    // A send seen while the stored folders still load waits for them; the store
+    // refuses edits until then, and the tracker has already let the send go.
+    const waiting = new Map<string, number>();
+    const flush = (): void => {
+      // Storage can finish loading while the folders turn off; nothing is saved after that.
+      if (scope.isDisposed || !store.ready || waiting.size === 0) return;
+      const entries = Array.from(waiting, ([conversationId, lastTurnAt]) => ({
+        conversationId,
+        lastTurnAt,
+      }));
+      waiting.clear();
+      void commands.run({ kind: 'setConversationActivity', entries });
+    };
+    scope.effect(() => {
+      const unsubscribe = store.subscribe(flush);
+      return () => {
+        unsubscribe();
+        waiting.clear();
+      };
+    }, 'chatgpt-folders:activity-wait');
+    trackChatGptLastTurn(scope, turnSelectors, (conversationId, lastTurnAt) => {
+      waiting.set(conversationId, Math.max(lastTurnAt, waiting.get(conversationId) ?? 0));
+      flush();
+    });
+  }
   const sidebar = new ChatGptSidebarWatcher(scope);
   const moveMenu = new ChatGptMoveMenu({
     label: () => t('conversation_move_to_folder'),

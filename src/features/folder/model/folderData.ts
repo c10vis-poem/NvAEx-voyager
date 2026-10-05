@@ -22,13 +22,18 @@ export function sortFoldersByCreation(folders: readonly Folder[]): Folder[] {
   );
 }
 
+/** Whether a record shows starred; by default its own stored `starred`. */
+export type StarredReader = (conversation: ConversationReference) => boolean;
+const storedStar: StarredReader = (conversation) => !!conversation.starred;
+
 export function sortConversationsByPriority(
   conversations: readonly ConversationReference[],
   mode: ConversationSortMode = 'manual',
+  starred: StarredReader = storedStar,
 ): ConversationReference[] {
   return [...conversations].sort((a, b) => {
-    if (a.starred && !b.starred) return -1;
-    if (!a.starred && b.starred) return 1;
+    const starOrder = Number(starred(b)) - Number(starred(a));
+    if (starOrder !== 0) return starOrder;
 
     if (mode === 'manual') {
       const aIndex = a.sortIndex;
@@ -240,7 +245,12 @@ export function removeFolder(data: FolderData, folderId: string): FolderData {
     : { ...data, folders, folderContents };
 }
 
-/** Moves stored references, retaining their metadata and ordering within the dragged starred group. */
+/**
+ * Moves stored references, retaining their metadata and ordering within the
+ * dragged starred group. `starred` is the star the tree shows (a conversation's,
+ * from any of its records), so the groups match the rows the drop was aimed at;
+ * stored `starred` values are left as they are.
+ */
 export function reorderConversations(
   data: FolderData,
   conversationIds: readonly string[],
@@ -248,6 +258,7 @@ export function reorderConversations(
   targetParentId: string,
   insertIndex: number,
   mode: ConversationSortMode = 'manual',
+  starred: StarredReader = storedStar,
 ): FolderData {
   const removeSet = new Set(conversationIds);
   const uniqueIds = [...removeSet];
@@ -273,12 +284,14 @@ export function reorderConversations(
     const index = firstById.get(id);
     return index === undefined ? [] : [folderContents[sourceParentId][index]];
   });
-  const isStarred = moving[0].starred ?? false;
+  const isStarred = starred(moving[0]);
+  const inGroup = (conversation: ConversationReference) => starred(conversation) === isStarred;
 
   if (sourceParentId === targetParentId) {
     const originalSorted = sortConversationsByPriority(
-      folderContents[targetParentId].filter((conversation) => !!conversation.starred === isStarred),
+      folderContents[targetParentId].filter(inGroup),
       mode,
+      starred,
     );
     const originalIndices = firstIndexById(originalSorted, removeSet);
     let adjustment = 0;
@@ -297,7 +310,7 @@ export function reorderConversations(
     ),
   );
   if (sourceParentId !== targetParentId) {
-    sortConversationsByPriority(folderContents[sourceParentId], mode).forEach(
+    sortConversationsByPriority(folderContents[sourceParentId], mode, starred).forEach(
       (conversation, index) => {
         conversation.sortIndex = index;
       },
@@ -307,11 +320,8 @@ export function reorderConversations(
   const target = folderContents[targetParentId].filter(
     (conversation) => !removeSet.has(conversation.conversationId),
   );
-  const sameGroup = sortConversationsByPriority(
-    target.filter((conversation) => !!conversation.starred === isStarred),
-    mode,
-  );
-  const otherGroup = target.filter((conversation) => !!conversation.starred !== isStarred);
+  const sameGroup = sortConversationsByPriority(target.filter(inGroup), mode, starred);
+  const otherGroup = target.filter((conversation) => !inGroup(conversation));
   // Keep the existing splice semantics: the UI supplies an index in the original starred group.
   sameGroup.splice(Math.min(insertIndex, sameGroup.length), 0, ...moving);
   sameGroup.forEach((conversation, index) => {

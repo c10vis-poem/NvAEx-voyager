@@ -5,17 +5,14 @@ import type { ConversationSortMode } from '@/features/folder/model/folderData';
 
 import { hasSeenCoachmark } from '../coachmark';
 import type { FolderViewMode } from './activityView';
+import { FOLDER_TREE_INDENT, clampFolderDisplay } from './folderDisplay';
 
 export const FOLDER_ONLY_SEARCH_HINT_ID = 'folder-only-search-prefix-hint';
 
-const FOLDER_TREE_INDENT_MIN = -8;
-const FOLDER_TREE_INDENT_MAX = 32;
-export const FOLDER_TREE_INDENT_DEFAULT = -8;
+export const FOLDER_TREE_INDENT_DEFAULT = FOLDER_TREE_INDENT.defaultValue;
 
 export function clampFolderTreeIndent(value: unknown): number {
-  const numeric = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(numeric)) return FOLDER_TREE_INDENT_DEFAULT;
-  return Math.min(FOLDER_TREE_INDENT_MAX, Math.max(FOLDER_TREE_INDENT_MIN, Math.round(numeric)));
+  return clampFolderDisplay(FOLDER_TREE_INDENT, value);
 }
 
 export function toSortMode(value: unknown): ConversationSortMode {

@@ -23,6 +23,7 @@ import { initI18n } from '@/utils/i18n';
 import { activateChatGptFolders } from '../index';
 import { type SidebarFixture, makeRows, mountSidebarFixture } from './chatgptSidebarFixture';
 import { type MemoryStorage, createMemoryStorage, settle } from './memoryStorage';
+import { chooseSortMode, openSettings } from './sectionHeaderDriver';
 
 vi.mock('webextension-polyfill', () => ({
   default: {
@@ -174,12 +175,6 @@ function collapseToggle(): HTMLButtonElement {
   return shadow().querySelector<HTMLButtonElement>('h2 button')!;
 }
 
-function sortToggle(): HTMLButtonElement {
-  return shadow().querySelector<HTMLButtonElement>(
-    `button[aria-label="${label('folder_sort_recent')}"]`,
-  )!;
-}
-
 function status(): string {
   return toastDriver.messages().join('\n');
 }
@@ -252,7 +247,11 @@ describe('ChatGPT folder section: collapse', () => {
     expect(collapseToggle().getAttribute('aria-expanded')).toBe('false');
     expect(collapseToggle().textContent).toBe(label('floatingPanelTitle'));
     expect(view.outline()).toEqual([]);
-    expect(memory.values.local.get(PREFS_KEY)).toEqual({ collapsed: true, sortMode: 'manual' });
+    expect(memory.values.local.get(PREFS_KEY)).toEqual({
+      collapsed: true,
+      sortMode: 'manual',
+      viewMode: 'folders',
+    });
 
     const again = await reactivate();
     expect(collapseToggle().getAttribute('aria-expanded')).toBe('false');
@@ -274,7 +273,7 @@ describe('ChatGPT folder section: collapse', () => {
 });
 
 describe('ChatGPT folder section: conversation order', () => {
-  it('orders chats by when they were last opened or added, and keeps that order here', async () => {
+  it('the settings switch a folder to recent order, which reorders it and survives a reload', async () => {
     memory.values.local.set(KEY, {
       ...structuredClone(DATA),
       folders: DATA.folders.map((f) => ({ ...f, isExpanded: true })),
@@ -283,12 +282,18 @@ describe('ChatGPT folder section: conversation order', () => {
     expect(view.outline().slice(0, 4)).toEqual(['Work', '  · Alpha', '  · Beta plan', '  · Gamma']);
     const writes = folderWrites();
 
-    sortToggle().click();
+    const settings = openSettings();
+    chooseSortMode(settings, 'recent');
     await nextPass();
 
     expect(view.outline().slice(0, 4)).toEqual(['Work', '  · Gamma', '  · Beta plan', '  · Alpha']);
-    expect(sortToggle().getAttribute('aria-pressed')).toBe('true');
-    expect(memory.values.local.get(PREFS_KEY)).toEqual({ collapsed: false, sortMode: 'recent' });
+    const active = settings.querySelector('.gv-folder-sort-option[aria-pressed="true"]');
+    expect(active?.textContent).toBe(label('folder_sort_recent'));
+    expect(memory.values.local.get(PREFS_KEY)).toEqual({
+      collapsed: false,
+      sortMode: 'recent',
+      viewMode: 'folders',
+    });
     expect(folderWrites()).toBe(writes);
 
     const again = await reactivate();

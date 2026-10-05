@@ -8,8 +8,9 @@ import {
   UNCONFIRMED,
   failed,
 } from '@/features/folder/commands/folderCommands';
-import { ownBucket } from '@/features/folder/model/folderData';
+import { applyFolderOp } from '@/features/folder/owner/applyFolderOp';
 import { rejected } from '@/features/folder/owner/folderOps';
+import { FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 
 import type { FolderRepository } from './FolderRepository';
 import { applyNativePromptTitles } from './aistudioPromptHistory';
@@ -19,7 +20,6 @@ import {
   placePrompt,
   removeConversation,
   renameFolder,
-  toggleConversationStar,
   toggleFolderExpanded,
   toggleFolderPinned,
 } from './aistudioTree';
@@ -57,17 +57,14 @@ export function createLegacyAIStudioCommands(
         for (const id of ids) if (removeConversation(repository.data, folderId, id)) changed = true;
         return changed;
       }),
-    setConversationStarred: ({ conversationId, starred, scope }) => {
-      if (scope === 'everywhere') return unsupported();
-      return edit(() => {
-        const record = ownBucket(repository.data.folderContents, scope.folderId)?.find(
-          (conversation) => conversation.conversationId === conversationId,
-        );
-        return !!record && !!record.starred !== starred
-          ? toggleConversationStar(repository.data, scope.folderId, conversationId)
-          : false;
-      });
-    },
+    setConversationStarred: (body) =>
+      edit(() => {
+        const policy = FOLDER_SITE_POLICIES.aistudio;
+        const { data, outcome } = applyFolderOp(repository.data, body, policy, Date.now());
+        if (outcome.kind !== 'saved') return false;
+        repository.data = data;
+        return true;
+      }),
     setFolderPinned: ({ folderId, pinned }) =>
       edit(() => {
         const folder = folderOf(folderId);

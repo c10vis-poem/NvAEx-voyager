@@ -31,17 +31,24 @@ describe('folder sidebar typography', () => {
 
   it('keeps Activity headings and rows on the shared native section axis', () => {
     const css = readFileSync(resolve(process.cwd(), 'public/contentStyle.css'), 'utf8');
+    const activityCss = readFileSync(
+      resolve(process.cwd(), 'src/pages/content/folder/sidebarActivityList.css'),
+      'utf8',
+    );
     const containerBlock = css.match(/\.gv-folder-container\s*{([\s\S]*?)}/)?.[1] ?? '';
     const headerBlock = css.match(/\.gv-folder-header\s*{([\s\S]*?)}/)?.[1] ?? '';
-    const activityListBlock = css.match(/\.gv-folder-activity-list\s*{([\s\S]*?)}/)?.[1] ?? '';
+    const activityListBlock =
+      activityCss.match(/\.gv-folder-activity-list\s*{([\s\S]*?)}/)?.[1] ?? '';
     const activityHeadingBlock =
-      css.match(/\.gv-folder-activity-heading\s*{([\s\S]*?)}/)?.[1] ?? '';
-    const activityItemBlock = css.match(/\.gv-folder-activity-item\s*{([\s\S]*?)}/)?.[1] ?? '';
+      activityCss.match(/\.gv-folder-activity-heading\s*{([\s\S]*?)}/)?.[1] ?? '';
+    const activityItemBlock =
+      activityCss.match(/\.gv-folder-activity-item\s*{([\s\S]*?)}/)?.[1] ?? '';
     const starredActivityBlock =
-      css.match(/\.gv-folder-activity-item\.gv-starred\s*{([\s\S]*?)}/)?.[1] ?? '';
+      activityCss.match(/\.gv-folder-activity-item\.gv-starred\s*{([\s\S]*?)}/)?.[1] ?? '';
     const selectedActivityBlock =
-      css.match(/\.gv-folder-activity-item\.gv-folder-conversation-selected\s*{([\s\S]*?)}/)?.[1] ??
-      '';
+      activityCss.match(
+        /\.gv-folder-activity-item\.gv-folder-conversation-selected\s*{([\s\S]*?)}/,
+      )?.[1] ?? '';
 
     expect(containerBlock).toContain('--gv-folder-section-gutter: 14px;');
     expect(containerBlock).toContain('--gv-folder-list-edge: 4px;');

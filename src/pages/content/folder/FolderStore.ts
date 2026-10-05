@@ -5,6 +5,7 @@ import {
 import { buildConversationIdFromUrl } from '@/core/utils/conversationIdentity';
 import { isExtensionContextInvalidatedError } from '@/core/utils/extensionContext';
 import { MAX_FOLDER_DEPTH } from '@/features/folder/constants';
+import { readConversationStars } from '@/features/folder/model/conversationStars';
 import {
   type ConversationSortMode,
   cloneFolderData,
@@ -16,6 +17,7 @@ import {
   setBucket,
 } from '@/features/folder/model/folderData';
 import { placeConversations } from '@/features/folder/model/placeConversations';
+import { FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 
 import { TimestampService } from '../timestamp/TimestampService';
 import { historyTimestampStore } from '../timestamp/historyTimestamps';
@@ -304,7 +306,9 @@ export class FolderStore {
       : dragData.conversationId
         ? [{ ...dragData, conversationId: dragData.conversationId }]
         : [];
-    const records = items.map((item) => this.buildDroppedConversation(item));
+    const records = this.withConversationStars(
+      items.map((item) => this.buildDroppedConversation(item)),
+    );
     this.data = placeConversations(this.data, records, {
       target: folderId,
       placement: 'append',
@@ -336,6 +340,14 @@ export class FolderStore {
     return syncConversationTitleFromNative(conversationId) || normalizedTitle || 'Untitled';
   }
 
+  /** A star is the conversation's: a new record of a chat starred in another folder keeps it. */
+  private withConversationStars(records: ConversationReference[]): ConversationReference[] {
+    const starred = readConversationStars(this.data, FOLDER_SITE_POLICIES.gemini);
+    return records.map((record) =>
+      !record.starred && starred(record) ? { ...record, starred: true } : record,
+    );
+  }
+
   reorderOrMoveConversations(
     conversationIds: string[],
     sourceParentId: string,
@@ -350,6 +362,8 @@ export class FolderStore {
       targetParentId,
       insertIndex,
       this.options.getContext().sortMode,
+      // The groups the tree drew: a row shows starred when any copy of its chat is.
+      readConversationStars(this.data, FOLDER_SITE_POLICIES.gemini),
     );
     if (nextData === this.data) return;
     this.data = nextData;
@@ -368,7 +382,7 @@ export class FolderStore {
       dragData.sourceFolderId !== folderId ? dragData.sourceFolderId : undefined;
     const { data, added } = placeConversations(
       this.data,
-      [this.buildDroppedConversation({ ...dragData, conversationId })],
+      this.withConversationStars([this.buildDroppedConversation({ ...dragData, conversationId })]),
       {
         target: folderId,
         placement: 'append',
@@ -400,15 +414,17 @@ export class FolderStore {
       sourceFolderId,
     });
 
-    const records = conversations.map((conv) => ({
-      ...conv,
-      title: sourceFolderId
-        ? conv.title
-        : this.resolveDraggedConversationTitleForStorage(conv.conversationId, conv.title),
-      addedAt: Date.now(),
-      lastTurnAt:
-        conv.lastTurnAt ?? this.getKnownConversationLastTurnAt(conv.conversationId, conv.url),
-    }));
+    const records = this.withConversationStars(
+      conversations.map((conv) => ({
+        ...conv,
+        title: sourceFolderId
+          ? conv.title
+          : this.resolveDraggedConversationTitleForStorage(conv.conversationId, conv.title),
+        addedAt: Date.now(),
+        lastTurnAt:
+          conv.lastTurnAt ?? this.getKnownConversationLastTurnAt(conv.conversationId, conv.url),
+      })),
+    );
     const { data, added } = placeConversations(this.data, records, {
       target: folderId,
       placement: 'append',
@@ -573,7 +589,7 @@ export class FolderStore {
       isGem,
       gemId,
     };
-    const { data, added } = placeConversations(this.data, [record], {
+    const { data, added } = placeConversations(this.data, this.withConversationStars([record]), {
       target: folderId,
       placement: 'top',
       keysOf: conversationKeys,

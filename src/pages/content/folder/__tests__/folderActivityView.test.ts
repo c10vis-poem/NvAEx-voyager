@@ -20,6 +20,7 @@ vi.mock('webextension-polyfill', () => ({
 }));
 
 vi.mock('@/utils/i18n', () => ({
+  getCachedLocale: () => 'en',
   getTranslationSync: (key: string) => key,
   getTranslationSyncUnsafe: (key: string) => key,
   initI18n: () => Promise.resolve(),
@@ -269,7 +270,36 @@ describe('folder Activity view', () => {
     expect(savedCopies.every((conversation) => conversation.lastTurnAt === nextTurnAt)).toBe(true);
   });
 
-  it('marks the user filter button active after the Activity bell is inserted first', async () => {
+  it('the activity bell stays beside the create button while other header actions are hidden', async () => {
+    harness = await createFolderViewHarness(activityData());
+
+    const buttons = [
+      ...(harness.runtime.panel?.querySelectorAll<HTMLButtonElement>(
+        '.gv-folder-header-actions button',
+      ) ?? []),
+    ];
+    const roles = buttons.map(
+      (button) =>
+        [
+          'gv-folder-user-filter-toggle',
+          'gv-folder-import-export-btn',
+          'gv-folder-cloud-btn',
+          'gv-folder-settings-btn',
+          'gv-folder-activity-toggle',
+          'gv-folder-add-btn',
+        ].find((role) => button.classList.contains(role)) ?? button.className,
+    );
+    expect(roles).toEqual([
+      'gv-folder-user-filter-toggle',
+      'gv-folder-import-export-btn',
+      'gv-folder-cloud-btn',
+      'gv-folder-settings-btn',
+      'gv-folder-activity-toggle',
+      'gv-folder-add-btn',
+    ]);
+  });
+
+  it('marks the user filter button active, not the Activity bell', async () => {
     vi.mocked(browser.storage.local.get).mockResolvedValue({
       [StorageKeys.FOLDERS_VIEW_MODE]: 'folders',
     });

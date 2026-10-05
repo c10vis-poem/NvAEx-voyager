@@ -242,9 +242,9 @@ describe('Gemini conversation placement entry points', () => {
       });
 
       expect(ids('s')).toEqual(['b']);
-      // Built from the payload: the stored record's star does not travel.
+      // Built from the payload, but the chat's star is the conversation's and travels.
       expect(find('f', 'a')).toMatchObject({ title: 'A', addedAt: NOW, sortIndex: 0 });
-      expect(find('f', 'a')?.starred).toBeUndefined();
+      expect(find('f', 'a')?.starred).toBe(true);
       expect(await saves()).toBe(1);
       expect(onChange).toHaveBeenCalledWith('data');
       expect(onArchive).not.toHaveBeenCalled();

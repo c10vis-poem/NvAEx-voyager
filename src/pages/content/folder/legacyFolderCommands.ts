@@ -18,6 +18,7 @@ import { ownBucket } from '@/features/folder/model/folderData';
 import { type ConversationSeed, rejected } from '@/features/folder/owner/folderOps';
 
 import type { FolderStore } from './FolderStore';
+import { resolveConversationRouteId } from './folderConversationIdentity';
 import type { DragData } from './types';
 
 type Kind = FolderEditBody['kind'];
@@ -157,7 +158,13 @@ export function createLegacyFolderCommands(store: FolderStore): FolderCommands {
       edit(() => store.removeConversationFromAllFolders(conversationId)),
     setConversationStarred: ({ conversationId, starred, scope }) => {
       if (scope === 'everywhere') {
-        return edit(() => store.setConversationStarAcrossFolders(conversationId, starred));
+        // An imported record keeps a synthetic id beside its chat's real `/app/` route,
+        // which every copy answers to; the synthetic id names only itself.
+        const record = Object.values(store.data.folderContents)
+          .flat()
+          .find((c) => c.conversationId === conversationId);
+        const routeId = resolveConversationRouteId(record?.url, conversationId) ?? conversationId;
+        return edit(() => store.setConversationStarAcrossFolders(routeId, starred));
       }
       const record = recordIn(scope.folderId, conversationId);
       return toggleIf(record && !!record.starred !== starred, () =>

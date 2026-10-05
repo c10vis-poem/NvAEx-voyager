@@ -75,7 +75,6 @@ describe('ChatGptFolderStore', () => {
     s.addConversation(folderId, conversation('a'), 'top');
     s.addConversation(ROOT_CONVERSATIONS_ID, conversation('b'), 'top');
     s.renameFolder(folderId, 'Projects');
-    s.toggleStar(folderId, 'chatgpt:conv:a');
     s.setFolderColor(folderId, 'blue');
     s.toggleFolderPinned(folderId);
     s.toggleFolderExpanded(folderId);

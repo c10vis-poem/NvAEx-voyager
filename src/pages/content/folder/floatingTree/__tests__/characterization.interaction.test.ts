@@ -68,17 +68,21 @@ describe.each(CONSUMERS)('$name: chats', ({ consumer }) => {
     expect(view.bucketsShowing('Shared').sort()).toEqual([tree.rootBucketId, 'a', 'b'].sort());
   });
 
-  it('stars the copy in the folder whose row was used, and shows the stored star', () => {
+  it('shows a chat starred in one folder as starred in every folder, and one click unstars it', () => {
     const { tree, view, actions, stored } = mount(consumer);
 
     view.toggleStar('b', 'Shared');
-    expect(actions.onToggleStar.mock.calls).toEqual([['b', 'shared']]);
+    expect(actions.onToggleStar.mock.calls).toEqual([['shared', true]]);
 
     stored.folderContents.b[0].starred = true;
     tree.update(structuredClone(stored));
     expect(view.isStarred('b', 'Shared')).toBe(true);
-    expect(view.isStarred('a', 'Shared')).toBe(false);
-    expect(view.isStarred(tree.rootBucketId, 'Shared')).toBe(false);
+    expect(view.isStarred('a', 'Shared')).toBe(true);
+    expect(view.isStarred(tree.rootBucketId, 'Shared')).toBe(true);
+    expect(view.isStarred('a', 'Solo')).toBe(false);
+
+    view.toggleStar('a', 'Shared');
+    expect(actions.onToggleStar.mock.calls.at(-1)).toEqual(['shared', false]);
   });
 
   it('removes a chat from the folder whose row was used, at once without a confirm', () => {

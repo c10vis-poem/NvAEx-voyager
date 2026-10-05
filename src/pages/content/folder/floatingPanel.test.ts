@@ -195,7 +195,7 @@ describe('mountFloatingPanel', () => {
     click(requireElement<HTMLButtonElement>(row, `.${FLOATING_PANEL_CLASS}__icon-button--star`));
     click(requireElement<HTMLButtonElement>(row, `.${FLOATING_PANEL_CLASS}__icon-button--remove`));
 
-    expect(onToggleStar).toHaveBeenCalledWith('folder-a', 'conv-a');
+    expect(onToggleStar).toHaveBeenCalledWith('conv-a', false);
     expect(onRemoveConversation).toHaveBeenCalledWith('folder-a', 'conv-a');
   });
 

@@ -2641,10 +2641,6 @@
     "message": "Add current conversation here",
     "description": "Floating folder panel folder menu item that files the open conversation into that folder"
   },
-  "chatgptFoldersAddCurrent": {
-    "message": "Add current conversation",
-    "description": "ChatGPT folder panel header button that files the open conversation at the top level"
-  },
   "chatgptFoldersHint": {
     "message": "To file a conversation: open it, then click the bookmark button or right-click a folder.",
     "description": "ChatGPT folder panel hint explaining how to file a conversation"

@@ -14,6 +14,7 @@ import { initI18n, getTranslationSyncUnsafe as t } from '@/utils/i18n';
 import { activateChatGptFolders } from '../index';
 import { type SidebarFixture, makeRows, mountSidebarFixture } from './chatgptSidebarFixture';
 import { type MemoryStorage, createMemoryStorage, settle } from './memoryStorage';
+import { openSettings, stepSetting, transfer } from './sectionHeaderDriver';
 
 vi.mock('webextension-polyfill', () => ({
   default: {
@@ -217,20 +218,53 @@ describe('ChatGPT folder section in the sidebar', () => {
     });
   });
 
-  it('exports from its own header and confirms it there', async () => {
+  it('the import/export menu exports, confirming it in the section, and opens the import picker', async () => {
     const download = vi
       .spyOn(FolderImportExportService, 'downloadJSON')
       .mockImplementation(() => {});
+    // The picker is never attached to the page; keep its click from opening anything.
+    const pick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
     await activate();
 
-    section()
-      .shadowRoot!.querySelector<HTMLButtonElement>('button[aria-label="Export folders"]')!
-      .click();
+    transfer('export');
 
     expect(download).toHaveBeenCalledTimes(1);
     expect(toastDriver.all()).toMatchObject([
       { message: t('folder_export_success'), tone: 'success' },
     ]);
+
+    transfer('import');
+
+    expect(pick).toHaveBeenCalledTimes(1);
+    expect((pick.mock.contexts[0] as HTMLInputElement).type).toBe('file');
+  });
+
+  it('changing the font size in the settings resizes the folder rows, here and from elsewhere', async () => {
+    await activate();
+    const host = section();
+    // Jsdom draws nothing: the rows' sheet sizes their text from these on the host.
+    const rowFont = () => [
+      host.style.getPropertyValue('--gv-folder-item-font-size'),
+      host.style.getPropertyValue('--gv-folder-item-line-height'),
+    ];
+    // Unset, the section keeps ChatGPT's own 14px rows, which the settings show.
+    expect(rowFont()).toEqual(['', '']);
+    const settings = openSettings();
+    expect(settings.querySelector('.gv-folder-stepper-value')?.textContent).toBe('14px');
+
+    stepSetting(settings, 'folder_item_font_size', 'up');
+    await nextPass();
+
+    expect(memory.values.sync.get(StorageKeys.GV_FOLDER_ITEM_FONT_SIZE)).toBe(15);
+    expect(rowFont()).toEqual(['15px', '20px']);
+
+    // Gemini's settings, or another tab, share the choice.
+    memory.external('sync', StorageKeys.GV_FOLDER_ITEM_FONT_SIZE, 18);
+    await nextPass();
+    expect(rowFont()).toEqual(['18px', '23px']);
+
+    await scope.dispose();
+    expect(rowFont()).toEqual(['', '']);
   });
 
   it('creates and saves a folder from its own header', async () => {

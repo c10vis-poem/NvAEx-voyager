@@ -50,24 +50,31 @@ export function createMemoryStorage(): MemoryStorage {
     notify(area, changes);
   };
 
+  const read = (name: Area, keys: Keys): Record<string, unknown> => {
+    const store = values[name];
+    const result: Record<string, unknown> = {};
+    if (keys === null || keys === undefined) {
+      for (const [key, value] of store) result[key] = clone(value);
+      return result;
+    }
+    const entries: Array<[string, unknown]> =
+      typeof keys === 'string'
+        ? [[keys, undefined]]
+        : Array.isArray(keys)
+          ? keys.map((key) => [key, undefined])
+          : Object.entries(keys);
+    for (const [key, fallback] of entries) {
+      if (store.has(key)) result[key] = clone(store.get(key));
+      else if (fallback !== undefined) result[key] = fallback;
+    }
+    return result;
+  };
+
   const area = (name: Area) => ({
-    get: async (keys?: Keys) => {
-      const store = values[name];
-      const result: Record<string, unknown> = {};
-      if (keys === null || keys === undefined) {
-        for (const [key, value] of store) result[key] = clone(value);
-        return result;
-      }
-      const entries: Array<[string, unknown]> =
-        typeof keys === 'string'
-          ? [[keys, undefined]]
-          : Array.isArray(keys)
-            ? keys.map((key) => [key, undefined])
-            : Object.entries(keys);
-      for (const [key, fallback] of entries) {
-        if (store.has(key)) result[key] = clone(store.get(key));
-        else if (fallback !== undefined) result[key] = fallback;
-      }
+    // Promise style, or chrome's callback style when one is passed.
+    get: async (keys?: Keys, callback?: (items: Record<string, unknown>) => void) => {
+      const result = read(name, keys);
+      callback?.(result);
       return result;
     },
     set: async (items: Record<string, unknown>) => apply(name, items, true),

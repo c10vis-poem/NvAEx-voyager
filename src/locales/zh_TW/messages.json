@@ -2637,10 +2637,6 @@
     "message": "將目前對話加入此處",
     "description": "Floating folder panel folder menu item that files the open conversation into that folder"
   },
-  "chatgptFoldersAddCurrent": {
-    "message": "加入目前對話",
-    "description": "ChatGPT folder panel header button that files the open conversation at the top level"
-  },
   "chatgptFoldersHint": {
     "message": "歸檔對話：先開啟對話，再點擊書籤按鈕，或在資料夾上按右鍵。",
     "description": "ChatGPT folder panel hint explaining how to file a conversation"

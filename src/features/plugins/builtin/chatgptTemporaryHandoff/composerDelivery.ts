@@ -194,10 +194,12 @@ export function hasAttachmentPreview(input: HTMLElement, filename: string): bool
 }
 
 export function hasCurrentComposerAttachments(): boolean {
-  const input = currentComposer();
-  const root = input?.closest('form');
-  if (!root?.isConnected) return false;
+  const root = currentComposer()?.closest('form');
+  return !!root?.isConnected && hasComposerAttachments(root);
+}
 
+/** Whether ChatGPT's composer form holds an attached file. */
+export function hasComposerAttachments(root: Element): boolean {
   const fileInputs = root.querySelectorAll<HTMLInputElement>('input[type="file"]');
   if (Array.from(fileInputs).some((fileInput) => (fileInput.files?.length ?? 0) > 0)) return true;
 

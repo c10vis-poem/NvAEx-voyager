@@ -1,6 +1,7 @@
 import { StorageKeys } from '@/core/types/common';
 import type { ConversationReference } from '@/core/types/folder';
 import { AISTUDIO_ROOT_BUCKET_ID, ROOT_CONVERSATIONS_ID } from '@/features/folder/constants';
+import { EXACT_CONVERSATION_IDENTITY } from '@/features/folder/model/conversationStars';
 import {
   conversationKeys,
   normalizeConversationId,
@@ -34,11 +35,6 @@ export interface FolderSitePolicy {
   addPlacement: (via: AddVia) => ConversationPlacement;
 }
 
-const exactKeys = (conversation: ConversationReference): readonly string[] => [
-  conversation.conversationId,
-];
-const exactId = (id: string): string | null => id || null;
-
 export const FOLDER_SITE_POLICIES: Readonly<Record<FolderSite, FolderSitePolicy>> = {
   gemini: {
     site: 'gemini',
@@ -55,8 +51,8 @@ export const FOLDER_SITE_POLICIES: Readonly<Record<FolderSite, FolderSitePolicy>
     site: 'aistudio',
     hosts: FOLDER_PLATFORMS.aistudio.hosts,
     rootBucketId: AISTUDIO_ROOT_BUCKET_ID,
-    keysOf: exactKeys,
-    idKey: exactId,
+    keysOf: EXACT_CONVERSATION_IDENTITY.keysOf,
+    idKey: EXACT_CONVERSATION_IDENTITY.idKey,
     resetAddedAtOnMove: false,
     singleBucket: true,
     addPlacement: () => 'keep',
@@ -65,8 +61,8 @@ export const FOLDER_SITE_POLICIES: Readonly<Record<FolderSite, FolderSitePolicy>
     site: 'chatgpt',
     hosts: ['chatgpt.com'],
     rootBucketId: ROOT_CONVERSATIONS_ID,
-    keysOf: exactKeys,
-    idKey: exactId,
+    keysOf: EXACT_CONVERSATION_IDENTITY.keysOf,
+    idKey: EXACT_CONVERSATION_IDENTITY.idKey,
     resetAddedAtOnMove: false,
     singleBucket: false,
     addPlacement: (via) => (via === 'outside-drop' ? 'append' : 'top'),

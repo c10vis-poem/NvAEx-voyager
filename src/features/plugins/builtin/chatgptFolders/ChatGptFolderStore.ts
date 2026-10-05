@@ -1,4 +1,5 @@
 import { MAX_FOLDER_DEPTH } from '@/features/folder/constants';
+import { readConversationStars } from '@/features/folder/model/conversationStars';
 import {
   getFolderDepth,
   moveFolder,
@@ -11,6 +12,7 @@ import {
   type ConversationPlacement,
   placeConversations,
 } from '@/features/folder/model/placeConversations';
+import { FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 import { FolderRepository } from '@/pages/content/folder/FolderRepository';
 import { applyNativeTitle } from '@/pages/content/folder/conversationTitleSync';
 import { AIStudioFolderStorageAdapter } from '@/pages/content/folder/storage/AIStudioFolderStorageAdapter';
@@ -27,9 +29,10 @@ export type MoveOutcome = 'moved' | 'unchanged' | 'missing' | 'closed';
 
 /**
  * What a change to the folders was. `opened`: only the time a conversation was
- * opened, which the recent order reads; nothing else in the data moved.
+ * opened, which the recent order reads; `activity`: only when one was last
+ * sent to, which the Activity view reads. Nothing else in the data moved.
  */
-export type ChatGptFolderChange = 'data' | 'opened';
+export type ChatGptFolderChange = 'data' | 'opened' | 'activity';
 
 /**
  * ChatGPT folder commands over the shared FolderRepository, which owns load,
@@ -130,12 +133,6 @@ export class ChatGptFolderStore {
     return this.replaceIfChanged(moveFolder(this.data, folderId, parentId, Date.now(), index));
   }
 
-  toggleStar(folderId: string, conversationId: string): void {
-    const conversation = ownBucket(this.data.folderContents, folderId)?.find(
-      (c) => c.conversationId === conversationId,
-    );
-    if (conversation) this.commit(() => (conversation.starred = !conversation.starred));
-  }
   removeConversation(folderId: string, conversationId: string): void {
     const bucket = ownBucket(this.data.folderContents, folderId);
     if (!bucket) return;
@@ -163,12 +160,15 @@ export class ChatGptFolderStore {
   }
   /**
    * Moves `ids` from `from` to `index` in `target` (the same bucket reorders),
-   * within their starred group, as Gemini's manual order does.
+   * within their starred group as the tree shows it, as Gemini's manual order does.
    */
   reorderConversations(ids: string[], from: string, target: string, index: number): MoveOutcome {
     if (!this.ready) return 'closed';
     if (!this.hasBucketOwner(target)) return 'missing';
-    return this.replaceIfChanged(reorderConversations(this.data, ids, from, target, index));
+    const starred = readConversationStars(this.data, FOLDER_SITE_POLICIES.chatgpt);
+    return this.replaceIfChanged(
+      reorderConversations(this.data, ids, from, target, index, 'manual', starred),
+    );
   }
   /**
    * Files `conversation` into `target` at `placement`. A picker or menu may still
@@ -237,7 +237,7 @@ export class ChatGptFolderStore {
 
   /**
    * Commits `next`, a snapshot computed from `data` (a shared owner op's result).
-   * `opened`: it only stamps when a conversation was opened. Returns whether it changed.
+   * `change` says what it stamps, if only a time. Returns whether it changed.
    */
   apply(next: FolderData, change: ChatGptFolderChange = 'data'): boolean {
     if (!this.ready || next === this.data) return false;

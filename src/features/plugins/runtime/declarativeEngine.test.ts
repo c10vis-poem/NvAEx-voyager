@@ -82,18 +82,19 @@ describe('DeclarativeEngine', () => {
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
-  it('runs a scope-based (activate) handler and disposes its scope on unmount', async () => {
+  it('runs a scope-based (activate) handler with the page adapter and disposes its scope on unmount', async () => {
     const disposer = vi.fn();
     const activate = vi.fn((scope: PluginScope) => {
       scope.effect(() => disposer, 'test-effect');
     });
     registerNativeHandler('test.scoped', { activate });
-    const engine = new DeclarativeEngine({ doc: document });
+    const engine = new DeclarativeEngine({ doc: document, adapter });
     const manifest = makeManifest({}, 'test.scoped');
 
     engine.mount(manifest, { key: 'v' });
     expect(activate).toHaveBeenCalledOnce();
-    expect(activate).toHaveBeenCalledWith(expect.any(PluginScope), { key: 'v' });
+    // A published site override reaches native plugins through the adapter the host hands the engine.
+    expect(activate).toHaveBeenCalledWith(expect.any(PluginScope), { key: 'v' }, adapter);
 
     engine.unmount('test.scoped');
     await vi.waitFor(() => expect(disposer).toHaveBeenCalledOnce());
@@ -133,7 +134,7 @@ describe('DeclarativeEngine', () => {
 
     await vi.waitFor(() => expect(activate).toHaveBeenCalledTimes(2));
     expect(disposer).toHaveBeenCalledOnce();
-    expect(activate).toHaveBeenLastCalledWith(expect.any(PluginScope), { flag: true });
+    expect(activate).toHaveBeenLastCalledWith(expect.any(PluginScope), { flag: true }, null);
   });
 
   it('a scope handler WITH updateSettings gets the update, not a restart', () => {

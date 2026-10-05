@@ -366,7 +366,7 @@ export class DeclarativeEngine {
     const scope = new PluginScope();
     entry.scope = scope;
     try {
-      const result = handler.activate(scope, settings);
+      const result = handler.activate(scope, settings, this.adapter);
       if (result instanceof Promise) {
         result.catch((error) => {
           logger.error('Plugin activation failed', {

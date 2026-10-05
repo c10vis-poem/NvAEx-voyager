@@ -1,10 +1,9 @@
 import { createStarIcon } from '@/core/icons/folderIcons';
 import type { FolderCommands } from '@/features/folder/commands/folderCommands';
-import { getTranslationSyncUnsafe as t } from '@/utils/i18n';
+import { getCachedLocale, getTranslationSyncUnsafe as t } from '@/utils/i18n';
 
 import type { FolderFeedback } from './FolderFeedback';
 import type { FolderNavigation } from './FolderNavigation';
-import type { FolderStore } from './FolderStore';
 import {
   ACTIVITY_PRIORITY_WINDOW_MS,
   type ConversationActivityGroup,
@@ -13,23 +12,34 @@ import {
   formatActivityFolderSummary,
 } from './activityView';
 import type { FolderDialogs } from './folderDialogs';
+import { ensurePageSheet } from './pageSheet';
+import listCss from './sidebarActivityList.css?raw';
 import {
   type FolderSearchCriteria,
   getCurrentUserId,
   isCurrentUserConversation,
   normalizeFolderSearchText,
 } from './sidebarFilter';
-import type { ConversationReference } from './types';
+import type { ConversationReference, FolderData } from './types';
+
+/** The list's sheet, for a shadow root that holds the list. */
+export const ACTIVITY_LIST_CSS = listCss;
+
+/** Adds the list's sheet to the page once, for a list in page DOM (Gemini's). */
+export function ensureActivityListStyle(doc: Document = document): void {
+  ensurePageSheet('gv-folder-activity-style', listCss, doc);
+}
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
-interface SidebarActivityListOptions {
-  store: FolderStore;
-  commands: FolderCommands;
-  navigation: FolderNavigation;
-  feedback: FolderFeedback;
-  dialogs: FolderDialogs;
-  onRenameNative(conversation: ConversationReference): Promise<boolean>;
+export interface SidebarActivityListOptions {
+  store: { readonly data: FolderData };
+  commands: Pick<FolderCommands, 'run'>;
+  navigation: Pick<FolderNavigation, 'getConversationHref' | 'navigate'>;
+  /** Folder paths on hover; without it they are the context line's native tooltip. */
+  feedback?: Pick<FolderFeedback, 'showTooltip' | 'hideTooltip'>;
+  dialogs: Pick<FolderDialogs, 'openMenu'>;
+  onRenameNative(conversation: ConversationReference): unknown;
   /** Re-renders the sidebar when the priority group's oldest entry ages out. */
   onExpire(): void;
 }
@@ -40,7 +50,7 @@ function formatActivityGroupHeading(group: ConversationActivityGroup): string {
   if (group.id === 'yesterday') return t('folder_activity_yesterday');
   if (!group.dayStart) return '';
 
-  return new Date(group.dayStart).toLocaleDateString([], { weekday: 'long' });
+  return new Date(group.dayStart).toLocaleDateString(getCachedLocale(), { weekday: 'long' });
 }
 
 function formatActivityTimestamp(timestamp: number | undefined): string {
@@ -53,9 +63,11 @@ function formatActivityTimestamp(timestamp: number | undefined): string {
     date.getMonth() === now.getMonth() &&
     date.getDate() === now.getDate();
 
+  // Voyager's language, not the browser's: a Chinese UI must not read "11:19 PM".
+  const locale = getCachedLocale();
   return sameDay
-    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    ? date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
 /** The sidebar's activity view: recent chats grouped by day, read from the same folder data. */
@@ -168,10 +180,16 @@ export class SidebarActivityList {
     context.className = 'gv-folder-activity-context';
     context.textContent = folderSummary;
     context.setAttribute('aria-label', folderPaths);
-    context.addEventListener('mouseenter', () => feedback.showTooltip(context, folderPaths, true));
-    context.addEventListener('mouseleave', () => feedback.hideTooltip());
-    link.addEventListener('focus', () => feedback.showTooltip(context, folderPaths, true));
-    link.addEventListener('blur', () => feedback.hideTooltip());
+    if (feedback) {
+      context.addEventListener('mouseenter', () =>
+        feedback.showTooltip(context, folderPaths, true),
+      );
+      context.addEventListener('mouseleave', () => feedback.hideTooltip());
+      link.addEventListener('focus', () => feedback.showTooltip(context, folderPaths, true));
+      link.addEventListener('blur', () => feedback.hideTooltip());
+    } else {
+      context.title = folderPaths;
+    }
 
     text.append(title, context);
     link.appendChild(text);
@@ -182,7 +200,7 @@ export class SidebarActivityList {
       time.className = 'gv-folder-activity-time';
       time.dateTime = new Date(item.lastTurnAt).toISOString();
       time.textContent = timeLabel;
-      time.title = new Date(item.lastTurnAt).toLocaleString();
+      time.title = new Date(item.lastTurnAt).toLocaleString(getCachedLocale());
       row.appendChild(time);
     }
 
@@ -215,8 +233,10 @@ export class SidebarActivityList {
       );
       if (latest) this.options.navigation.navigate(latest, item.sourceFolderId);
     });
-    title.addEventListener('mouseenter', () => feedback.showTooltip(title, conversation.title));
-    title.addEventListener('mouseleave', () => feedback.hideTooltip());
+    if (feedback) {
+      title.addEventListener('mouseenter', () => feedback.showTooltip(title, conversation.title));
+      title.addEventListener('mouseleave', () => feedback.hideTooltip());
+    }
     title.addEventListener('dblclick', (event) => {
       event.preventDefault();
       event.stopPropagation();

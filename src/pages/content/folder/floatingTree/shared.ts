@@ -1,4 +1,5 @@
 import { MAX_FOLDER_DEPTH } from '@/features/folder/constants';
+import type { ConversationIdentity } from '@/features/folder/model/conversationStars';
 import {
   type ConversationSortMode,
   sortFoldersByCreation,
@@ -98,7 +99,11 @@ export type TreeActions = {
   onRemoveConversation?: (folderId: string, conversationId: string) => void;
   /** Asks before `onRemoveConversation`; without it, removal is immediate. */
   confirmConversationRemoval?: (title: string, anchor: HTMLElement, onConfirm: () => void) => void;
-  onToggleStar?: (folderId: string, conversationId: string) => void;
+  /**
+   * Sets a conversation's star in every folder that holds it; `starred` is the
+   * opposite of what its row shows.
+   */
+  onToggleStar?: (conversationId: string, starred: boolean) => void;
   onToggleFolderPinned?: (folderId: string) => void;
   /** Persists a folder's expansion; without it, expansion stays local to the panel. */
   onToggleFolderExpanded?: (folderId: string) => void;
@@ -147,6 +152,11 @@ export type TreeSiteOptions = {
   folderOrder?: 'created';
   /** `stored`: a folder's conversations in stored order. Default: starred first, then the sort mode. */
   conversationOrder?: 'stored';
+  /**
+   * Which rows are one conversation, sharing one star: the site's folder
+   * policy. Default: rows with the same stored id.
+   */
+  conversationIdentity?: ConversationIdentity;
   /**
    * Root conversations go under this heading after the folders, and a root drop
    * target stays even with no folders. Default: root conversations first, unlabelled.

@@ -233,6 +233,25 @@ describe('AI Studio folder tree: what it changes', () => {
     expect(stored().folderContents.b.find((c) => c.conversationId === 'c1')?.starred).toBe(false);
   });
 
+  it('stars a prompt that legacy data files in two folders in both, from either row', async () => {
+    const data = fixture();
+    data.folderContents.a.push(conv('c1', 'First stored'));
+    await mount(data);
+    const stars = () =>
+      (['b', 'a'] as const).map(
+        (id) => !!stored().folderContents[id].find((c) => c.conversationId === 'c1')?.starred,
+      );
+
+    tree.toggleStar('a', 'c1');
+    await flush();
+    expect(stars()).toEqual([true, true]);
+    expect(tree.isStarredInView('b', 'c1')).toBe(true);
+
+    tree.toggleStar('b', 'c1');
+    await flush();
+    expect(stars()).toEqual([false, false]);
+  });
+
   it('pins a folder, saves it and moves it up among pinned folders by creation', async () => {
     await mount();
     tree.togglePinned('a');
