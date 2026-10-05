@@ -16,7 +16,6 @@ import { requireBundledSiteAdapter } from '@/features/plugins/catalog/sites';
 import { PluginScope } from '@/features/plugins/runtime/pluginScope';
 import { initI18n } from '@/utils/i18n';
 
-import { NEW_CHAT_SETTLE_MS } from '../chatgptLastTurn';
 import { activateChatGptFolders } from '../index';
 import { type SidebarFixture, makeRows, mountSidebarFixture } from './chatgptSidebarFixture';
 import { type MemoryStorage, createMemoryStorage, settle } from './memoryStorage';
@@ -33,10 +32,10 @@ vi.mock('webextension-polyfill', () => ({
 
 const KEY = StorageKeys.FOLDER_DATA_CHATGPT;
 const ROOT = ROOT_CONVERSATIONS_ID;
-const TITLES = ['Launch plan', 'Old notes', 'Fresh idea'];
+const TITLES = ['Launch plan', 'Old notes'];
 // The sidebar shows the same titles, so title sync leaves them alone.
 const ROWS = makeRows(TITLES.length).map((row, index) => ({ ...row, title: TITLES[index] }));
-const [WORK_CHAT, OLD_CHAT, NEW_CHAT] = ROWS.map((row) => row.id);
+const [WORK_CHAT, OLD_CHAT] = ROWS.map((row) => row.id);
 /** Noon, so three hours either way stays on the same local day. */
 const NOON = new Date(2026, 9, 5, 12, 0, 0).getTime();
 const MINUTE = 60_000;
@@ -51,7 +50,7 @@ function ref(id: string, title: string, sortIndex: number): ConversationReferenc
   };
 }
 
-/** Work holds two chats; Later holds the chat a new-chat send will become. */
+/** Work holds both chats. */
 const DATA: FolderData = {
   folders: [
     {
@@ -63,19 +62,9 @@ const DATA: FolderData = {
       createdAt: 1,
       updatedAt: 1,
     },
-    {
-      id: 'later',
-      name: 'Later',
-      parentId: null,
-      isExpanded: true,
-      sortIndex: 1,
-      createdAt: 1,
-      updatedAt: 1,
-    },
   ],
   folderContents: {
     work: [ref(WORK_CHAT, 'Launch plan', 0), ref(OLD_CHAT, 'Old notes', 1)],
-    later: [ref(NEW_CHAT, 'Fresh idea', 0)],
     [ROOT]: [],
   },
 };
@@ -173,43 +162,6 @@ async function send(prompt: string): Promise<void> {
   await nextPass();
 }
 
-/**
- * ChatGPT naming a new chat: its router pushes `/c/<id>` (no `popstate`, which
- * only history traversal and in-app link fallbacks fire) while the reply streams in.
- */
-async function nameNewChat(path: string): Promise<void> {
-  history.pushState(null, '', path);
-  thread.lastElementChild?.append(document.createTextNode(' and more of the answer'));
-  await nextPass();
-}
-
-/** The user clicks a chat in ChatGPT's sidebar; its router pushes the route. */
-function openFromSidebar(id: string): void {
-  const link = document.querySelector<HTMLAnchorElement>(`a[href="/c/${id}"]`)!;
-  link.addEventListener(
-    'click',
-    (event) => {
-      event.preventDefault();
-      history.pushState(null, '', `/c/${id}`);
-    },
-    { once: true },
-  );
-  link.click();
-}
-
-/** Lets a new chat's first send settle on the route it was given. */
-async function outlastNewChatSettle(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, NEW_CHAT_SETTLE_MS + 50));
-  await nextPass();
-}
-
-/** A ChatGPT link the user opens without leaving this tab (Ctrl/Cmd-click). */
-function openInNewTab(id: string): void {
-  const link = document.querySelector<HTMLAnchorElement>(`a[href="/c/${id}"]`)!;
-  link.addEventListener('click', (event) => event.preventDefault(), { once: true });
-  link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }));
-}
-
 /** Delays the stored folders' first read until the returned `release` runs. */
 function holdFolderLoad(): { release: () => void; started: () => boolean } {
   const read = memory.api.local.get;
@@ -285,58 +237,18 @@ describe('ChatGPT folder Activity', () => {
     expect(lastTurnAt(WORK_CHAT)).toBe(NOON);
   });
 
-  it('the first message of a new chat is stamped once its route appears', async () => {
-    await activate();
-
-    await send('A brand-new chat');
-    expect(lastTurnAt(NEW_CHAT)).toBeUndefined();
-
-    vi.setSystemTime(NOON + MINUTE);
-    await nameNewChat(`/c/${NEW_CHAT}`);
-
-    // Stamped with when it was sent, under the route ChatGPT gave it.
-    await vi.waitFor(() => expect(lastTurnAt(NEW_CHAT)).toBe(NOON));
-    expect(lastTurnAt(WORK_CHAT)).toBeUndefined();
-  });
-
-  it("opening an old chat right after a new chat's first send does not stamp the old chat", async () => {
+  it('opening an old chat right after sending on a new chat does not stamp it', async () => {
     await activate();
     await send('A brand-new chat');
 
-    // Before ChatGPT names the new chat, the user opens an old one. Its
-    // transcript has not replaced the outgoing message yet when the page next changes.
-    openFromSidebar(OLD_CHAT);
-    thread.append(document.createElement('div'));
-    await nextPass();
-    thread.replaceChildren(exchange('An old question'));
-    await outlastNewChatSettle();
-
-    expect(lastTurnAt(OLD_CHAT)).toBeUndefined();
-    expect(lastTurnAt(NEW_CHAT)).toBeUndefined();
-  });
-
-  it('opening an old chat by its route before a new chat is named does not stamp the old chat', async () => {
-    await activate();
-    await send('A brand-new chat');
-
-    // No link click and no history traversal: a search result or shortcut moves the route.
+    // Before ChatGPT names the new chat, the user opens an old one, by a link
+    // or a search result; its transcript replaces the outgoing message later.
     history.pushState(null, '', `/c/${OLD_CHAT}`);
     thread.append(document.createElement('div'));
     await nextPass();
     thread.replaceChildren(exchange('An old question'));
-    await outlastNewChatSettle();
+    await nextPass();
 
-    expect(lastTurnAt(OLD_CHAT)).toBeUndefined();
-  });
-
-  it("opening a chat in a new tab keeps the current new chat's first send", async () => {
-    await activate();
-    await send('A brand-new chat');
-
-    openInNewTab(OLD_CHAT);
-    await nameNewChat(`/c/${NEW_CHAT}`);
-
-    await vi.waitFor(() => expect(lastTurnAt(NEW_CHAT)).toBe(NOON));
     expect(lastTurnAt(OLD_CHAT)).toBeUndefined();
   });
 
@@ -348,6 +260,18 @@ describe('ChatGPT folder Activity', () => {
     composer.textContent = 'Not sent yet';
     pressEnter();
     thread.append(exchange("Yesterday's last question"));
+    await nextPass();
+
+    expect(lastTurnAt(WORK_CHAT)).toBeUndefined();
+  });
+
+  it('a refused prompt does not stamp a chat whose last message merely contains it', async () => {
+    history.replaceState(null, '', `/c/${WORK_CHAT}`);
+    await activate();
+
+    composer.textContent = 'continue';
+    pressEnter();
+    thread.append(exchange('please continue'));
     await nextPass();
 
     expect(lastTurnAt(WORK_CHAT)).toBeUndefined();

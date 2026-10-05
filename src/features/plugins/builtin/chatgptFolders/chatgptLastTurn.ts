@@ -4,16 +4,14 @@
  * re-rendering its transcript or loading older messages never stamps a time.
  *
  * A send is a submit from ChatGPT's composer (Enter, its send button or the
- * form) with a prompt or a file in it. It is stamped once the message it
- * produced shows up as the newest user turn, holding the prompt that was
- * submitted, under the conversation's stored id. A new chat has no id until
- * ChatGPT gives it a `/c/<id>` route, so its first message waits for that
- * route and is stamped only if its turn is still on the page once the route
- * settles. Leaving the chat forgets the send. Temporary chats record nothing.
+ * form) with a prompt or a file in it, in a chat that already has a `/c/<id>`
+ * route. It is stamped once the message it produced shows up as the newest
+ * user turn, holding exactly the prompt that was submitted. Leaving the chat
+ * forgets the send. Temporary chats record nothing.
  */
 import type { PluginScope } from '@/features/plugins/runtime/pluginScope';
 import { isSendActionButton } from '@/pages/content/sendBehavior/sendButton';
-import { type RouteChange, watchRouteChanges } from '@/pages/content/utils/routeWatcher';
+import { watchRouteChanges } from '@/pages/content/utils/routeWatcher';
 
 import {
   hasComposerAttachments,
@@ -28,12 +26,6 @@ export type ChatGptTurnSelectors = { readonly userTurn: string; readonly compose
 /** A send whose message never showed up (ChatGPT was still answering, say) is forgotten after this. */
 const PENDING_SEND_MS = 30_000;
 /**
- * How long a new chat's first message must stay on the page after a `/c/<id>`
- * route appears. ChatGPT keeps that message when it names the chat; opening
- * another chat replaces the transcript.
- */
-export const NEW_CHAT_SETTLE_MS = 500;
-/**
  * What keeps one user message's identity across re-renders and remounts: its
  * exchange item's key, or the message id of ChatGPT's older layout.
  */
@@ -41,16 +33,12 @@ const TURN_KEY_SELECTOR = '[data-turn-key], [data-message-id]';
 
 type PendingSend = {
   readonly sentAt: number;
-  /** The chat it was sent in; `null` for a new chat without a route yet. */
-  readonly conversationId: string | null;
+  /** The chat it was sent in. */
+  readonly conversationId: string;
   /** User turns on the page when it was sent. */
   readonly known: ReadonlySet<string>;
   /** The prompt it submitted, without whitespace; empty for a file sent alone. */
   readonly prompt: string;
-  /** The message it produced, once it showed up. */
-  turn: Element | null;
-  /** Whether a new chat's first message is waiting out {@link NEW_CHAT_SETTLE_MS}. */
-  settling: boolean;
   readonly disposers: Array<() => void | Promise<void>>;
 };
 
@@ -89,53 +77,23 @@ export function trackChatGptLastTurn(
     pending = null;
   };
 
-  const finish = (conversationId: string): void => {
-    if (!pending) return;
-    const { sentAt } = pending;
-    forget();
-    record(conversationId, sentAt);
-  };
-
   const check = (): void => {
     if (!pending) return;
-    if (pending.turn === null) {
-      // A send adds the newest turn; older ones mounting while it settles are not it.
-      const newest = keyedTurns().at(-1);
-      if (!newest || pending.known.has(newest.key)) return;
-      // A prompt ChatGPT refused stays unsent, and the chat's own last message
-      // hydrating next would otherwise pass for it.
-      if (!compact(newest.turn.textContent ?? '').includes(pending.prompt)) return;
-      pending.turn = newest.turn;
-    }
-    const conversationId = routeConversation();
-    if (!conversationId) return;
-    if (pending.conversationId !== null) {
-      if (pending.conversationId === conversationId) finish(conversationId);
-      else forget();
-      return;
-    }
-    if (pending.settling) return;
-    // Any route change can bring a `/c/<id>` (a search result, a shortcut, a
-    // link), so only the message surviving it shows ChatGPT named this chat.
-    pending.settling = true;
-    const turn = pending.turn;
-    pending.disposers.push(
-      scope.timer(() => {
-        if (turn.isConnected && routeConversation() === conversationId) finish(conversationId);
-        else forget();
-      }, NEW_CHAT_SETTLE_MS),
-    );
+    // A send adds the newest turn; older ones mounting while it settles are not it.
+    const newest = keyedTurns().at(-1);
+    if (!newest || pending.known.has(newest.key)) return;
+    // Exactly its prompt: a refused prompt stays unsent, and the chat's own last
+    // message hydrating next must not pass for it. A file sent alone has no prompt.
+    if (pending.prompt !== '' && compact(newest.turn.textContent ?? '') !== pending.prompt) return;
+    const { conversationId, sentAt } = pending;
+    forget();
+    if (routeConversation() === conversationId) record(conversationId, sentAt);
   };
 
-  const onRoute = ({ trigger }: RouteChange): void => {
+  const onRoute = (): void => {
     if (!pending) return;
-    // Leaving the chat: its old turns would take the send's place. ChatGPT names
-    // a new chat without history traversal, so a `popstate` leaves it too.
-    const left =
-      pending.conversationId === null
-        ? trigger === 'popstate'
-        : routeConversation() !== pending.conversationId;
-    if (left) forget();
+    // Leaving the chat: its old turns would take the send's place.
+    if (routeConversation() !== pending.conversationId) forget();
     else check();
   };
 
@@ -148,6 +106,9 @@ export function trackChatGptLastTurn(
     if (scope.isDisposed || submitting || isTemporaryChat()) return;
     // An empty submit sends nothing; armed, it would claim whichever chat's turn mounted next.
     if (!hasDraft(fields, form)) return;
+    // A chat without a `/c/<id>` yet cannot be in a folder, so its first send has nothing to stamp.
+    const conversationId = routeConversation();
+    if (!conversationId) return;
     const prompt = compact(
       fields.map((field) => (field instanceof HTMLElement ? readComposerText(field) : '')).join(''),
     );
@@ -157,11 +118,9 @@ export function trackChatGptLastTurn(
     forget();
     pending = {
       sentAt: Date.now(),
-      conversationId: routeConversation(),
+      conversationId,
       known: new Set(keyedTurns().map(({ key }) => key)),
       prompt,
-      turn: null,
-      settling: false,
       disposers: [
         scope.observe(doc.body, { childList: true, subtree: true }, check),
         scope.effect(() => watchRouteChanges(onRoute), 'chatgpt-folders:last-turn-route'),
