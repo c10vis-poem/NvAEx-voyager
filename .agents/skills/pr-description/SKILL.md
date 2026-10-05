@@ -3,7 +3,7 @@ name: pr-description
 description: Write or rewrite a Voyager pull request description.
 ---
 
-Read the full PR diff, then open the description with three sections and keep the verification and browser-testing sections of `.github/pull_request_template.md` below them:
+Read the full PR diff, then fill `.github/pull_request_template.md`. Its first three sections:
 
 - **Why the change**: one sentence on the problem solved and what it enables.
 - **Special things to note**: 1–3 bullets on reviewer warnings, data compatibility, deliberate omissions or surprising decisions; `- None.` when there are none.
