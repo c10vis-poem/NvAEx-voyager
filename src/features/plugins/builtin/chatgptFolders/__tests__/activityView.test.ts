@@ -14,7 +14,7 @@ import type { ConversationReference, FolderData } from '@/core/types/folder';
 import { ROOT_CONVERSATIONS_ID } from '@/features/folder/constants';
 import { requireBundledSiteAdapter } from '@/features/plugins/catalog/sites';
 import { PluginScope } from '@/features/plugins/runtime/pluginScope';
-import { initI18n, getTranslationSyncUnsafe as t } from '@/utils/i18n';
+import { initI18n, setCachedLanguage, getTranslationSyncUnsafe as t } from '@/utils/i18n';
 
 import { activateChatGptFolders } from '../index';
 import { type SidebarFixture, makeRows, mountSidebarFixture } from './chatgptSidebarFixture';
@@ -391,16 +391,70 @@ describe('ChatGPT folder Activity', () => {
     expect(lastTurnAt(WORK_CHAT)).toBe(NOON);
   });
 
-  it('the header shows exactly Activity, import/export, cloud, settings and create, in that order', async () => {
+  it('the header shows exactly import/export, cloud, settings, Activity and create, in that order', async () => {
     await activate();
 
     expect(headerLabels()).toEqual([
-      t('folder_activity_turn_on'),
       t('folder_import_export'),
       t('folder_cloud'),
       t('folder_settings'),
+      t('folder_activity_turn_on'),
       t('floatingPanelCreateFolder'),
     ]);
+  });
+
+  it('the activity bell stays beside the create button while other header actions are hidden', async () => {
+    await activate();
+    bell().click();
+    await nextPass();
+
+    const buttons = [
+      ...shadow().querySelectorAll<HTMLButtonElement>('.gv-folder-header-actions button'),
+    ];
+    const at = buttons.indexOf(bell());
+    const hiddenAtRest = buttons.filter(
+      (button) =>
+        button.classList.contains('gv-folder-header-reveal') &&
+        button.getAttribute('aria-pressed') !== 'true',
+    );
+    expect(bell().getAttribute('aria-pressed')).toBe('true');
+    expect(buttons.slice(at + 1).map((button) => button.getAttribute('aria-label'))).toEqual([
+      t('floatingPanelCreateFolder'),
+    ]);
+    expect(hiddenAtRest.length).toBeGreaterThan(0);
+    expect(hiddenAtRest.every((button) => buttons.indexOf(button) < at)).toBe(true);
+  });
+
+  it("activity times use Voyager's language, not the browser's", async () => {
+    // An English (US) browser: an unspecified locale formats as en-US.
+    const toLocaleTimeString = Date.prototype.toLocaleTimeString;
+    const englishBrowser = vi
+      .spyOn(Date.prototype, 'toLocaleTimeString')
+      .mockImplementation(function (
+        this: Date,
+        locales?: Intl.LocalesArgument,
+        options?: Intl.DateTimeFormatOptions,
+      ) {
+        const browserDefault = locales === undefined || (Array.isArray(locales) && !locales.length);
+        return toLocaleTimeString.call(this, browserDefault ? 'en-US' : locales, options);
+      });
+    try {
+      history.replaceState(null, '', `/c/${WORK_CHAT}`);
+      await activate();
+      await send('Ship it');
+      setCachedLanguage('zh');
+      bell().click();
+      await nextPass();
+
+      const time = shadow().querySelector('.gv-folder-activity-time')?.textContent;
+      expect(time).toBe(
+        new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(NOON),
+      );
+      expect(time).not.toMatch(/AM|PM/);
+    } finally {
+      setCachedLanguage('en');
+      englishBrowser.mockRestore();
+    }
   });
 
   it('the ChatGPT bell shows the activity list with a just-sent chat under Priority', async () => {

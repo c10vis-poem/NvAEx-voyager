@@ -1,6 +1,6 @@
 import { createStarIcon } from '@/core/icons/folderIcons';
 import type { FolderCommands } from '@/features/folder/commands/folderCommands';
-import { getTranslationSyncUnsafe as t } from '@/utils/i18n';
+import { getCachedLocale, getTranslationSyncUnsafe as t } from '@/utils/i18n';
 
 import type { FolderFeedback } from './FolderFeedback';
 import type { FolderNavigation } from './FolderNavigation';
@@ -50,7 +50,7 @@ function formatActivityGroupHeading(group: ConversationActivityGroup): string {
   if (group.id === 'yesterday') return t('folder_activity_yesterday');
   if (!group.dayStart) return '';
 
-  return new Date(group.dayStart).toLocaleDateString([], { weekday: 'long' });
+  return new Date(group.dayStart).toLocaleDateString(getCachedLocale(), { weekday: 'long' });
 }
 
 function formatActivityTimestamp(timestamp: number | undefined): string {
@@ -63,9 +63,11 @@ function formatActivityTimestamp(timestamp: number | undefined): string {
     date.getMonth() === now.getMonth() &&
     date.getDate() === now.getDate();
 
+  // Voyager's language, not the browser's: a Chinese UI must not read "11:19 PM".
+  const locale = getCachedLocale();
   return sameDay
-    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    ? date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 }
 
 /** The sidebar's activity view: recent chats grouped by day, read from the same folder data. */
@@ -198,7 +200,7 @@ export class SidebarActivityList {
       time.className = 'gv-folder-activity-time';
       time.dateTime = new Date(item.lastTurnAt).toISOString();
       time.textContent = timeLabel;
-      time.title = new Date(item.lastTurnAt).toLocaleString();
+      time.title = new Date(item.lastTurnAt).toLocaleString(getCachedLocale());
       row.appendChild(time);
     }
 

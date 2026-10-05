@@ -1,7 +1,7 @@
 /**
- * The folder header's standard buttons, in one order on every site: Activity,
- * import/export, cloud, settings, create. A site supplies what each does and
- * may add its own buttons after Activity (Gemini's current-user filter).
+ * The folder header's standard buttons, in one order on every site:
+ * import/export, cloud, settings, Activity, create. A site supplies what each
+ * does and may add its own buttons first (Gemini's current-user filter).
  */
 import { createBellIcon } from '@/core/icons/bellIcon';
 import { createFolderIcon, createPlusIcon, createSettingsIcon } from '@/core/icons/folderIcons';
@@ -18,7 +18,7 @@ import {
 export type FolderHeaderActionsOptions = {
   /** The folders/Activity toggle; its label follows its state, so the site sets it. */
   activity?: { className?: string; pressed?: boolean; onClick: (event: MouseEvent) => void };
-  /** Site buttons, placed after Activity. */
+  /** Site buttons, placed before import/export. */
   extra?: readonly FolderHeaderAction[];
   transfer: { import: () => void; export: () => void };
   cloud: { upload: () => void; sync: () => void };
@@ -55,17 +55,6 @@ export function folderHeaderActions(options: FolderHeaderActionsOptions): Folder
   const { activity, reveal, symbolFont = false } = options;
   const size = options.iconSize ?? 18;
   return [
-    ...(activity
-      ? [
-          {
-            className: activity.className ?? 'gv-folder-activity-toggle',
-            icon: () => createBellIcon(size),
-            reveal,
-            pressed: activity.pressed,
-            onClick: activity.onClick,
-          },
-        ]
-      : []),
     ...(options.extra ?? []),
     {
       className: 'gv-folder-import-export-btn',
@@ -82,6 +71,19 @@ export function folderHeaderActions(options: FolderHeaderActionsOptions): Folder
       reveal,
       onClick: options.settings,
     },
+    // A pressed bell stays visible while the reveal buttons fade but keep their
+    // space, so it sits next to "create" with all of them on its left.
+    ...(activity
+      ? [
+          {
+            className: activity.className ?? 'gv-folder-activity-toggle',
+            icon: () => createBellIcon(size),
+            reveal,
+            pressed: activity.pressed,
+            onClick: activity.onClick,
+          },
+        ]
+      : []),
     {
       className: options.create.className ?? 'gv-folder-add-btn',
       primary: true,

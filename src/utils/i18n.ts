@@ -2,7 +2,7 @@ import browser from 'webextension-polyfill';
 
 import { StorageKeys } from '@/core/types/common';
 
-import { type AppLanguage, normalizeLanguage } from './language';
+import { type AppLanguage, localeFromLanguage, normalizeLanguage } from './language';
 import { TRANSLATIONS, type TranslationKey, isTranslationKey } from './translations';
 
 type StorageAreaName = 'sync' | 'local';
@@ -85,6 +85,11 @@ let languageListenerInstalled = false;
 export function getTranslationSync(key: TranslationKey): string {
   const language = cachedLanguage || 'en';
   return TRANSLATIONS[language][key] ?? TRANSLATIONS.en[key] ?? key;
+}
+
+/** The language synchronous translations use, as a BCP-47 tag for Intl formatting. */
+export function getCachedLocale(): string {
+  return localeFromLanguage(cachedLanguage || 'en');
 }
 
 export function getTranslationSyncUnsafe(key: string): string {

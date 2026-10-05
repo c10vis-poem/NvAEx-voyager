@@ -187,7 +187,8 @@ export class ChatGptFolderSection {
         onToggle: () => this.setPrefs({ collapsed: !this.prefs.collapsed }),
       },
       containClicks: true,
-      // Gemini's header buttons, in its order; all but "create" show while the header is in use.
+      // Gemini's header buttons, in its order; all but "create" and a pressed bell show only
+      // while the header is in use.
       actions: folderHeaderActions({
         activity: activity && {
           className: ACTIVITY_TOGGLE_CLASS,

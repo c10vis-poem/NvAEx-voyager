@@ -27,7 +27,7 @@ export type SidebarHeaderOptions = {
 
 /**
  * Gemini's folder section title row on the shared folder header: collapse,
- * activity, filter, import/export, cloud, settings, add.
+ * filter, import/export, cloud, settings, activity, add.
  */
 export function createSidebarHeader(options: SidebarHeaderOptions): HTMLElement {
   const { headerMenus, transfer } = options;
@@ -38,9 +38,8 @@ export function createSidebarHeader(options: SidebarHeaderOptions): HTMLElement 
     collapse: { onToggle: options.onToggleCollapsed },
     openMenu: (event, _anchor, items) => headerMenus.openActions(event, items),
     actions: folderHeaderActions({
-      // Activity is a read-only projection over the same folder data. The bell
-      // occupies the old section-hider eye slot while the left chevron remains
-      // the single collapse control.
+      // Activity is a read-only projection over the same folder data; the left
+      // chevron remains the single collapse control.
       activity: {
         onClick: (event) => {
           event.stopPropagation();
