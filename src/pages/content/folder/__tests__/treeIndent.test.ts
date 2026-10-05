@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StorageKeys } from '@/core/types/common';
 
-import { FOLDER_INDENT_PROPERTY, SIDEBAR_TREE_HOST_CLASS } from '../sidebarTree';
+import { FOLDER_INDENT_PROPERTY } from '../folderDisplay';
+import { SIDEBAR_TREE_HOST_CLASS } from '../sidebarTree';
 import { createFolderViewHarness, resetFolderViewBrowserMocks } from './folderViewHarness';
 import { sidebarTree } from './sidebarTreeDriver';
 

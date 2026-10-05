@@ -20,6 +20,7 @@ import {
 import { mountFolderTree } from './floatingTree/treeController';
 import { normalizeConversationId, resolveConversationRouteId } from './folderConversationIdentity';
 import type { FolderDialogs } from './folderDialogs';
+import { FOLDER_INDENT_PROPERTY } from './folderDisplay';
 import { DEFAULT_CONVERSATION_ICON, getGemIcon } from './gemConfig';
 import { getCurrentHexIdFromLocation } from './nativeConversationIds';
 import { attachShadowSurface } from './shadowHost';
@@ -28,8 +29,6 @@ import { searchAndSortOptions } from './sidebarFilter';
 import type { ConversationReference, Folder } from './types';
 
 export const SIDEBAR_TREE_HOST_CLASS = 'gv-folder-tree-host';
-/** The indent setting on the host, which the rows' padding reads. */
-export const FOLDER_INDENT_PROPERTY = '--gv-folder-indent';
 /**
  * The open folder chat's title, kept in the page for readers that cannot see
  * into the tree: the timeline title, the export adapter and the PDF exporter

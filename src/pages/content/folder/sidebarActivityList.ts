@@ -12,6 +12,7 @@ import {
   formatActivityFolderSummary,
 } from './activityView';
 import type { FolderDialogs } from './folderDialogs';
+import { ensurePageSheet } from './pageSheet';
 import listCss from './sidebarActivityList.css?raw';
 import {
   type FolderSearchCriteria,
@@ -21,11 +22,13 @@ import {
 } from './sidebarFilter';
 import type { ConversationReference, FolderData } from './types';
 
-/**
- * The list's sheet for a shadow root, with the row rules and tokens Gemini's
- * page sheet (`public/contentStyle.css`) gives its page-DOM list.
- */
+/** The list's sheet, for a shadow root that holds the list. */
 export const ACTIVITY_LIST_CSS = listCss;
+
+/** Adds the list's sheet to the page once, for a list in page DOM (Gemini's). */
+export function ensureActivityListStyle(doc: Document = document): void {
+  ensurePageSheet('gv-folder-activity-style', listCss, doc);
+}
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 

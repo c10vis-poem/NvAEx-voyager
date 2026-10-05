@@ -19,7 +19,7 @@ import {
   buildNativeConversationTitleMap,
   lookupNativeConversationTitle,
 } from './nativeConversationTitles';
-import { SidebarActivityList } from './sidebarActivityList';
+import { SidebarActivityList, ensureActivityListStyle } from './sidebarActivityList';
 import { type SidebarDropContext, bindRootDropZone } from './sidebarDrops';
 import { type FolderSearchCriteria, createSidebarFilter, searchCriteriaOf } from './sidebarFilter';
 import {
@@ -191,6 +191,7 @@ export class FolderSidebarView {
   }
 
   createPanel(): HTMLElement {
+    ensureActivityListStyle();
     const panel = document.createElement('div');
     panel.className = 'gv-folder-container';
     panel.appendChild(this.options.selection.createMultiSelectIndicator());

@@ -1,38 +1,63 @@
-/* The Activity list (sidebarActivityList.ts) inside a shadow root, such as
- * ChatGPT's folder section. Gemini's list is page DOM and keeps its rules in
- * public/contentStyle.css; none of this reaches it. The page sheet's row rules
- * (.gv-folder-conversation, .gv-conversation-title, the star button, the empty
- * state) and its tokens cannot cross the shadow boundary, so this sheet holds
- * what the list needs of them, already merged with the Activity overrides.
+/* The Activity list (sidebarActivityList.ts), one sheet for every site. Gemini's
+ * list is page DOM: it loads this as a page sheet after contentStyle.css, whose
+ * row rules (.gv-folder-conversation, .gv-conversation-title, the star button,
+ * .gv-folder-empty) and tokens it builds on. A shadow root, such as ChatGPT's
+ * folder section, gets none of those, so the `:host` rules restate what the
+ * list needs of them; they never match on the page.
  *
- * Values are Gemini's. A host re-points the `--gv-folder-activity-*` tokens on
- * `.gv-folder-activity-list` and sets its own fonts after this sheet. Scheme
- * and direction come from the shadow host's `data-gv-scheme` and `data-gv-rtl`
- * attributes (shadowHost.ts), as page selectors cannot match here. */
+ * Values are Gemini's. Page rules follow `html[data-gv-scheme]` and
+ * `body.gv-rtl`; in a shadow root the host's `data-gv-scheme` and `data-gv-rtl`
+ * (shadowHost.ts) stand in for them. A host re-points the
+ * `--gv-folder-activity-*` tokens on `.gv-folder-activity-list` and sets its
+ * own fonts after this sheet. */
 
+/* Activity is a read-only projection over folder contents. Its typography and
+ * spacing follow Gemini's native sidebar density while the second line keeps
+ * folder context visible without turning every row into a card. */
 .gv-folder-activity-list {
-  --gv-folder-activity-text: #1f2937;
-  --gv-folder-activity-muted: #6b7280;
-  --gv-folder-activity-hover: rgba(31, 31, 31, 0.055);
-  /* The section's 14px text axis, less the list's own edge. */
-  --gv-folder-activity-edge: 4px;
-  --gv-folder-activity-row-inset: 10px;
-
+  --gv-folder-activity-text: var(--folder-text, #1f2937);
+  --gv-folder-activity-muted: var(--folder-icon-color, #6b7280);
+  --gv-folder-activity-hover: var(
+    --gm3-sys-color-surface-container-highest,
+    rgba(31, 31, 31, 0.055)
+  );
+  --gv-folder-activity-selected: var(
+    --gm3-sys-color-surface-container-highest,
+    rgba(31, 31, 31, 0.07)
+  );
   display: flex;
   flex-direction: column;
   gap: 0;
   padding-block: 0 2px;
-  padding-inline: var(--gv-folder-activity-edge);
+  padding-inline: var(--gv-folder-list-edge);
 }
 
 .gv-folder-activity-list[hidden] {
   display: none;
 }
 
+html[data-gv-scheme='dark'] .gv-folder-activity-list {
+  --gv-folder-activity-hover: var(
+    --gm3-sys-color-surface-container-highest,
+    rgba(255, 255, 255, 0.075)
+  );
+  --gv-folder-activity-selected: var(
+    --gm3-sys-color-surface-container-highest,
+    rgba(255, 255, 255, 0.1)
+  );
+}
+
+/* Gemini's folder container sets the section's 14px text axis; a shadow root has none. */
+:host .gv-folder-activity-list {
+  --gv-folder-list-edge: 4px;
+  --gv-folder-activity-row-inset: 10px;
+}
+
 :host([data-gv-scheme='dark']) .gv-folder-activity-list {
   --gv-folder-activity-text: #e5e7eb;
   --gv-folder-activity-muted: #9ca3af;
   --gv-folder-activity-hover: rgba(255, 255, 255, 0.075);
+  --gv-folder-activity-selected: rgba(255, 255, 255, 0.1);
 }
 
 .gv-folder-activity-group {
@@ -70,11 +95,10 @@
   padding-inline: var(--gv-folder-activity-row-inset);
   border-radius: 8px;
   cursor: default;
-  transition: background-color 0.15s ease;
 }
 
-.gv-folder-activity-item:hover {
-  background: var(--gv-folder-activity-hover);
+:host .gv-folder-activity-item {
+  transition: background-color 0.15s ease;
 }
 
 .gv-folder-activity-link {
@@ -97,13 +121,16 @@
 .gv-folder-activity-text .gv-conversation-title {
   display: block;
   overflow: hidden;
-  color: var(--gv-folder-activity-text);
-  font-family: 'Google Sans', Roboto, Arial, sans-serif;
   font-size: 14px;
   font-weight: 500;
   line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+:host .gv-folder-activity-text .gv-conversation-title {
+  color: var(--gv-folder-activity-text);
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
 }
 
 .gv-folder-activity-context {
@@ -134,8 +161,28 @@
   white-space: nowrap;
 }
 
+/* Priority is already communicated by its section and recent activity. Star
+ * remains an independent row action, so avoid a second orange card treatment. */
+.gv-folder-activity-item.gv-starred {
+  background: transparent;
+}
+
+.gv-folder-activity-item.gv-starred::before,
+.gv-folder-activity-item.gv-folder-conversation-selected::before {
+  content: none;
+}
+
+.gv-folder-activity-item.gv-folder-conversation-selected {
+  background: var(--gv-folder-activity-selected) !important;
+  border-radius: 10px;
+}
+
+.gv-folder-activity-item:hover {
+  background: var(--gv-folder-activity-hover);
+}
+
 /* The star shows on the row's hover or its own focus, and stays once set. */
-.gv-folder-activity-item .gv-conversation-star-btn {
+:host .gv-folder-activity-item .gv-conversation-star-btn {
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -153,23 +200,26 @@
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.gv-folder-activity-item:hover .gv-conversation-star-btn,
-.gv-folder-activity-item .gv-conversation-star-btn:focus-visible {
+:host .gv-folder-activity-item:hover .gv-conversation-star-btn,
+:host .gv-folder-activity-item .gv-conversation-star-btn:focus-visible {
   opacity: 1;
 }
 
 .gv-folder-activity-item .gv-conversation-star-btn.starred {
   align-self: center;
+}
+
+:host .gv-folder-activity-item .gv-conversation-star-btn.starred {
   color: #fbbf24;
   opacity: 1;
 }
 
-.gv-folder-activity-item .gv-conversation-star-btn:hover {
+:host .gv-folder-activity-item .gv-conversation-star-btn:hover {
   background-color: rgba(251, 191, 36, 0.12);
   color: #fbbf24;
 }
 
-.gv-folder-activity-item .gv-conversation-star-btn > svg {
+:host .gv-folder-activity-item .gv-conversation-star-btn > svg {
   display: block;
   width: 18px;
   height: 18px;
@@ -181,6 +231,12 @@
   font-size: 12px;
   opacity: 0.7;
   user-select: none;
+}
+
+body.gv-rtl .gv-folder-activity-heading,
+body.gv-rtl .gv-folder-activity-text,
+body.gv-rtl .gv-folder-activity-time {
+  text-align: right;
 }
 
 :host([data-gv-rtl]) .gv-folder-activity-heading,

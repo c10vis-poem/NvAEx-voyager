@@ -15,6 +15,7 @@ import {
 } from '@/core/icons/folderIcons';
 import { getTranslationSyncUnsafe as t } from '@/utils/i18n';
 
+import { ensurePageSheet } from '../pageSheet';
 import headerCss from './folderHeader.css?raw';
 import { openFolderHeaderMenu } from './folderHeaderMenu';
 
@@ -259,14 +260,7 @@ export function cloudMenuAction(
   };
 }
 
-/**
- * Adds the header sheet to the page once. Like the manifest's content sheet it
- * is static and stays for the page's life; it matches nothing but the header.
- */
+/** Adds the header sheet to the page once. */
 export function ensureFolderHeaderStyle(doc: Document = document): void {
-  if (doc.head.querySelector(`style.${PAGE_STYLE_CLASS}`)) return;
-  const style = doc.createElement('style');
-  style.className = PAGE_STYLE_CLASS;
-  style.textContent = headerCss;
-  doc.head.appendChild(style);
+  ensurePageSheet(PAGE_STYLE_CLASS, headerCss, doc);
 }

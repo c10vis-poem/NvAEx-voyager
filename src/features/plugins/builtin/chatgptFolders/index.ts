@@ -6,6 +6,7 @@
  * creates is registered on its PluginScope, so turning it off leaves nothing behind.
  */
 import { createDownloadIcon, createUploadIcon } from '@/core/icons/folderIcons';
+import { DOWNLOAD_PATH, UPLOAD_PATH } from '@/core/icons/transferPaths';
 import type { ConversationReference } from '@/core/types/folder';
 import { createToaster } from '@/core/ui/toast/toaster';
 import type { ToastTone } from '@/core/ui/toast/types';
@@ -60,7 +61,6 @@ import { findChatGptSidebar } from './chatgptSidebarDom';
 import { ChatGptSidebarWatcher } from './chatgptSidebarWatcher';
 import { ChatGptTitleSync } from './chatgptTitleSync';
 import { CHATGPT_FOLDER_CONFIG } from './config';
-import { DOWNLOAD_PATH, UPLOAD_PATH } from './icons';
 import { createLegacyChatGptCommands } from './legacyChatGptCommands';
 import { type ChatGptFolderPanelPrefs, loadPanelPrefs, savePanelPrefs } from './panelPrefs';
 import { type ChatGptFolderSectionPrefs, loadSectionPrefs, saveSectionPrefs } from './sectionPrefs';

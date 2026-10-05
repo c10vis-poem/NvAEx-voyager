@@ -482,7 +482,7 @@
   --gv-folder-activity-text: var(--gv-floating-folder-panel__text);
   --gv-folder-activity-muted: var(--gv-chatgpt-folder-section__heading);
   --gv-folder-activity-hover: var(--gv-floating-folder-panel__surface-hover);
-  --gv-folder-activity-edge: 6px;
+  --gv-folder-list-edge: 6px;
   --gv-folder-activity-row-inset: 10px;
 }
 
