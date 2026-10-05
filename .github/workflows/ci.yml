@@ -79,6 +79,9 @@ jobs:
               - '!scripts/update-readme-badges.test.js'
               - '!sponsorkit/**'
               - '!**/*.md'
+              # Agent skills and rules: prose, links and skill metadata that no build or test reads.
+              - '!.agents/**'
+              - '!.claude/**'
               - '!LICENSE'
               - '!.gitignore'
               - '!.gitattributes'
