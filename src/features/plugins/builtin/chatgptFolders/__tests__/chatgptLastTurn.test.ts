@@ -11,6 +11,7 @@ import { PluginScope } from '@/features/plugins/runtime/pluginScope';
 import { trackChatGptLastTurn } from '../chatgptLastTurn';
 
 const WORK = 'chatgpt:conv:work';
+const PROMPT = 'A prompt';
 
 let scope: PluginScope;
 let record: ReturnType<typeof vi.fn<(conversationId: string, at: number) => void>>;
@@ -20,13 +21,14 @@ let composer: HTMLElement;
 function exchange(key: string): HTMLElement {
   const item = document.createElement('div');
   item.setAttribute('data-turn-key', key);
-  item.innerHTML = '<div data-user-message-bubble="true">Message</div>';
+  item.innerHTML = '<div data-user-message-bubble="true"></div>';
+  item.firstElementChild!.textContent = PROMPT;
   return item;
 }
 
-/** The user types a prompt and presses Enter. */
+/** The user types the prompt each exchange shows and presses Enter. */
 function typeAndSend(): void {
-  composer.textContent = 'A prompt';
+  composer.textContent = PROMPT;
   composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 }
 

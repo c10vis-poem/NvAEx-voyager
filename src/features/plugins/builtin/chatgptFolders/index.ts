@@ -561,7 +561,8 @@ export async function activateChatGptFolders(
     // refuses edits until then, and the tracker has already let the send go.
     const waiting = new Map<string, number>();
     const flush = (): void => {
-      if (!store.ready || waiting.size === 0) return;
+      // Storage can finish loading while the folders turn off; nothing is saved after that.
+      if (scope.isDisposed || !store.ready || waiting.size === 0) return;
       const entries = Array.from(waiting, ([conversationId, lastTurnAt]) => ({
         conversationId,
         lastTurnAt,
@@ -569,7 +570,13 @@ export async function activateChatGptFolders(
       waiting.clear();
       void commands.run({ kind: 'setConversationActivity', entries });
     };
-    scope.effect(() => store.subscribe(flush), 'chatgpt-folders:activity-wait');
+    scope.effect(() => {
+      const unsubscribe = store.subscribe(flush);
+      return () => {
+        unsubscribe();
+        waiting.clear();
+      };
+    }, 'chatgpt-folders:activity-wait');
     trackChatGptLastTurn(scope, turnSelectors, (conversationId, lastTurnAt) => {
       waiting.set(conversationId, Math.max(lastTurnAt, waiting.get(conversationId) ?? 0));
       flush();

@@ -16,6 +16,7 @@ import { requireBundledSiteAdapter } from '@/features/plugins/catalog/sites';
 import { PluginScope } from '@/features/plugins/runtime/pluginScope';
 import { initI18n } from '@/utils/i18n';
 
+import { NEW_CHAT_SETTLE_MS } from '../chatgptLastTurn';
 import { activateChatGptFolders } from '../index';
 import { type SidebarFixture, makeRows, mountSidebarFixture } from './chatgptSidebarFixture';
 import { type MemoryStorage, createMemoryStorage, settle } from './memoryStorage';
@@ -196,6 +197,35 @@ function openFromSidebar(id: string): void {
   link.click();
 }
 
+/** Lets a new chat's first send settle on the route it was given. */
+async function outlastNewChatSettle(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, NEW_CHAT_SETTLE_MS + 50));
+  await nextPass();
+}
+
+/** A ChatGPT link the user opens without leaving this tab (Ctrl/Cmd-click). */
+function openInNewTab(id: string): void {
+  const link = document.querySelector<HTMLAnchorElement>(`a[href="/c/${id}"]`)!;
+  link.addEventListener('click', (event) => event.preventDefault(), { once: true });
+  link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }));
+}
+
+/** Delays the stored folders' first read until the returned `release` runs. */
+function holdFolderLoad(): { release: () => void; started: () => boolean } {
+  const read = memory.api.local.get;
+  let release!: () => void;
+  const loading = new Promise<void>((resolve) => (release = resolve));
+  let folderRead = false;
+  memory.api.local.get = (async (keys: unknown) => {
+    if (keys === KEY) {
+      folderRead = true;
+      await loading;
+    }
+    return read(keys as never);
+  }) as typeof read;
+  return { release, started: () => folderRead };
+}
+
 function lastTurnAt(id: string): number | undefined {
   const data = memory.values.local.get(KEY) as FolderData;
   return Object.values(data.folderContents)
@@ -265,7 +295,7 @@ describe('ChatGPT folder Activity', () => {
     await nameNewChat(`/c/${NEW_CHAT}`);
 
     // Stamped with when it was sent, under the route ChatGPT gave it.
-    expect(lastTurnAt(NEW_CHAT)).toBe(NOON);
+    await vi.waitFor(() => expect(lastTurnAt(NEW_CHAT)).toBe(NOON));
     expect(lastTurnAt(WORK_CHAT)).toBeUndefined();
   });
 
@@ -279,10 +309,63 @@ describe('ChatGPT folder Activity', () => {
     thread.append(document.createElement('div'));
     await nextPass();
     thread.replaceChildren(exchange('An old question'));
-    await nextPass();
+    await outlastNewChatSettle();
 
     expect(lastTurnAt(OLD_CHAT)).toBeUndefined();
     expect(lastTurnAt(NEW_CHAT)).toBeUndefined();
+  });
+
+  it('opening an old chat by its route before a new chat is named does not stamp the old chat', async () => {
+    await activate();
+    await send('A brand-new chat');
+
+    // No link click and no history traversal: a search result or shortcut moves the route.
+    history.pushState(null, '', `/c/${OLD_CHAT}`);
+    thread.append(document.createElement('div'));
+    await nextPass();
+    thread.replaceChildren(exchange('An old question'));
+    await outlastNewChatSettle();
+
+    expect(lastTurnAt(OLD_CHAT)).toBeUndefined();
+  });
+
+  it("opening a chat in a new tab keeps the current new chat's first send", async () => {
+    await activate();
+    await send('A brand-new chat');
+
+    openInNewTab(OLD_CHAT);
+    await nameNewChat(`/c/${NEW_CHAT}`);
+
+    await vi.waitFor(() => expect(lastTurnAt(NEW_CHAT)).toBe(NOON));
+    expect(lastTurnAt(OLD_CHAT)).toBeUndefined();
+  });
+
+  it('a prompt ChatGPT refused does not stamp the chat when its last message loads', async () => {
+    history.replaceState(null, '', `/c/${WORK_CHAT}`);
+    await activate();
+
+    // ChatGPT is not ready for it, so the prompt stays in the composer unsent.
+    composer.textContent = 'Not sent yet';
+    pressEnter();
+    thread.append(exchange("Yesterday's last question"));
+    await nextPass();
+
+    expect(lastTurnAt(WORK_CHAT)).toBeUndefined();
+  });
+
+  it('a file sent without a prompt records its turn time', async () => {
+    history.replaceState(null, '', `/c/${WORK_CHAT}`);
+    await activate();
+
+    const preview = document.createElement('div');
+    preview.setAttribute('data-attachment-id', 'file-1');
+    composer.closest('form')!.append(preview);
+    pressEnter();
+    preview.remove();
+    thread.append(exchange(''));
+    await nextPass();
+
+    expect(lastTurnAt(WORK_CHAT)).toBe(NOON);
   });
 
   it('an empty Enter in a new chat does not stamp the old chat opened next', async () => {
@@ -341,27 +424,34 @@ describe('ChatGPT folder Activity', () => {
 
   it('a message sent while ChatGPT folders are still loading still records its turn time', async () => {
     history.replaceState(null, '', `/c/${WORK_CHAT}`);
-    const read = memory.api.local.get;
-    let release!: () => void;
-    const loading = new Promise<void>((resolve) => (release = resolve));
-    let folderRead = false;
-    memory.api.local.get = (async (keys: unknown) => {
-      if (keys === KEY) {
-        folderRead = true;
-        await loading;
-      }
-      return read(keys as never);
-    }) as typeof read;
+    const load = holdFolderLoad();
     const activation = activateChatGptFolders(scope, {}, requireBundledSiteAdapter('chatgpt'));
-    await vi.waitFor(() => expect(folderRead).toBe(true));
+    await vi.waitFor(() => expect(load.started()).toBe(true));
 
     vi.setSystemTime(NOON + MINUTE);
     await send('Ship while it loads');
-    release();
+    load.release();
     await activation;
     await nextPass();
 
     expect(lastTurnAt(WORK_CHAT)).toBe(NOON + MINUTE);
+  });
+
+  it('a message sent while ChatGPT folders load is not saved once they are turned off', async () => {
+    history.replaceState(null, '', `/c/${WORK_CHAT}`);
+    const load = holdFolderLoad();
+    const activation = activateChatGptFolders(scope, {}, requireBundledSiteAdapter('chatgpt'));
+    await vi.waitFor(() => expect(load.started()).toBe(true));
+    await send('Ship while it loads');
+
+    // The folders finish loading while turning off is still under way.
+    const turningOff = scope.dispose();
+    load.release();
+    await activation;
+    await turningOff;
+    await nextPass();
+
+    expect(lastTurnAt(WORK_CHAT)).toBeUndefined();
   });
 
   it('temporary chats record nothing', async () => {
