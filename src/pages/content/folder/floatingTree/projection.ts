@@ -1,4 +1,8 @@
 import {
+  EXACT_CONVERSATION_IDENTITY,
+  readConversationStars,
+} from '@/features/folder/model/conversationStars';
+import {
   type ConversationSortMode,
   ownBucket,
   sortConversationsByPriority,
@@ -66,12 +70,16 @@ export type ProjectionInput = {
   data: FolderData;
   rootBucketId: string;
   conversationSortMode: ConversationSortMode;
-  site?: Pick<TreeSiteOptions, 'folderOrder' | 'conversationOrder' | 'rootSection' | 'filter'>;
+  site?: Pick<
+    TreeSiteOptions,
+    'folderOrder' | 'conversationOrder' | 'rootSection' | 'filter' | 'conversationIdentity'
+  >;
 };
 
 /**
  * Lays out folders (`layoutFolders`: cycles cut, repeats dropped) and each
  * bucket's conversations: stored order, or starred first then the sort mode.
+ * A row shows starred when any copy of its conversation is (`readConversationStars`).
  * A folder lists its own conversations before its subfolders, as the root
  * does, unless `rootSection` puts the root's after its folders.
  * A site filter reads the same cycle-cut layout, so it cannot lose a cycle.
@@ -93,10 +101,18 @@ export function buildTreeProjection({
     site?.conversationOrder === 'stored'
       ? list
       : sortConversationsByPriority(list, conversationSortMode);
+  const starred = readConversationStars(
+    data,
+    site?.conversationIdentity ?? EXACT_CONVERSATION_IDENTITY,
+  );
+  const withSharedStar = (conversation: ConversationReference): ConversationReference =>
+    !!conversation.starred === starred(conversation)
+      ? conversation
+      : { ...conversation, starred: true };
 
   const conversationsOf = (parentKey: string, bucketId: string, folderDepth: number): string[] => {
     const seen = new Map<string, number>();
-    const bucket = ownBucket(data.folderContents, bucketId) ?? [];
+    const bucket = (ownBucket(data.folderContents, bucketId) ?? []).map(withSharedStar);
     const shown = filter
       ? bucket.filter((conversation) => filter.conversation(conversation, bucketId))
       : bucket;

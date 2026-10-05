@@ -129,13 +129,7 @@ export function createLegacyChatGptCommands(store: ChatGptFolderStore): FolderCo
     },
     removeConversations: ({ folderId, ids }) =>
       edit(() => ids.forEach((id) => store.removeConversation(folderId, id))),
-    setConversationStarred: ({ conversationId, starred, scope }) => {
-      if (scope === 'everywhere') return unsupported();
-      const record = recordIn(scope.folderId, conversationId);
-      return toggleIf(record && !!record.starred !== starred, () =>
-        store.toggleStar(scope.folderId, conversationId),
-      );
-    },
+    setConversationStarred: (body) => applyOp(body),
     syncNativeTitles: ({ entries }) => {
       const titles = new Map(entries.map((e) => [bareConversationId(e.conversationId), e.title]));
       const editable = store.ready;

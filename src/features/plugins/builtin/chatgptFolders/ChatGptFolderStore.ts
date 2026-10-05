@@ -130,12 +130,6 @@ export class ChatGptFolderStore {
     return this.replaceIfChanged(moveFolder(this.data, folderId, parentId, Date.now(), index));
   }
 
-  toggleStar(folderId: string, conversationId: string): void {
-    const conversation = ownBucket(this.data.folderContents, folderId)?.find(
-      (c) => c.conversationId === conversationId,
-    );
-    if (conversation) this.commit(() => (conversation.starred = !conversation.starred));
-  }
   removeConversation(folderId: string, conversationId: string): void {
     const bucket = ownBucket(this.data.folderContents, folderId);
     if (!bucket) return;

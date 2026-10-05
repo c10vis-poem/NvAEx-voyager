@@ -300,3 +300,50 @@ describe('ChatGPT folder section: what it writes', () => {
     expect(stored().folders).toHaveLength(DATA.folders.length + 1);
   });
 });
+
+describe('ChatGPT folder section: a star belongs to the conversation', () => {
+  /** Whether each stored copy of "Shared" is starred: Work's, then Personal's. */
+  const sharedStars = () =>
+    (['work', 'personal'] as const).map(
+      (id) =>
+        !!stored().folderContents[id].find((c) => c.conversationId === 'chatgpt:conv:shared')
+          ?.starred,
+    );
+
+  /** DATA with Personal's copy of "Shared" starred and Work's filed after "Plan". */
+  function starredInPersonalOnly(): FolderData {
+    const data = structuredClone(DATA);
+    data.folderContents.work = [ref('plan', 'Plan', 0), ref('shared', 'Shared', 1)];
+    data.folderContents.personal = [{ ...ref('shared', 'Shared'), starred: true }];
+    return data;
+  }
+
+  it('starring a chat filed in two folders stars it in both', async () => {
+    const view = await activate();
+
+    view.toggleStar('work', 'Shared');
+    await nextPass();
+
+    expect(sharedStars()).toEqual([true, true]);
+    expect(view.isStarred('personal', 'Shared')).toBe(true);
+  });
+
+  it('a chat starred in only one folder shows starred and first in every folder', async () => {
+    memory.values.local.set(KEY, starredInPersonalOnly());
+    const view = await activate();
+
+    expect(view.isStarred('work', 'Shared')).toBe(true);
+    expect(view.outline().slice(0, 3)).toEqual(['Work', '  · Shared', '  · Plan']);
+  });
+
+  it('unstarring a chat starred in only one folder clears it in every folder', async () => {
+    memory.values.local.set(KEY, starredInPersonalOnly());
+    const view = await activate();
+
+    view.toggleStar('work', 'Shared');
+    await nextPass();
+
+    expect(sharedStars()).toEqual([false, false]);
+    expect(view.isStarred('personal', 'Shared')).toBe(false);
+  });
+});

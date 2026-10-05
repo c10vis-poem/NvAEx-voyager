@@ -1,6 +1,7 @@
 import { isSaved, type FolderCommands } from '@/features/folder/commands/folderCommands';
 import { ROOT_CONVERSATIONS_ID } from '@/features/folder/constants';
 import type { ConversationSortMode } from '@/features/folder/model/folderData';
+import { FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 import { getTranslationSyncUnsafe as t } from '@/utils/i18n';
 
 import type { FolderFeedback } from './FolderFeedback';
@@ -568,6 +569,7 @@ function siteOptions(options: SidebarTreeOptions, view: SidebarTreeView): TreeSi
     hideFolderCount: true,
     hideAddSubfolderButton: true,
     renameFillsRow: true,
+    conversationIdentity: FOLDER_SITE_POLICIES.gemini,
   };
 }
 

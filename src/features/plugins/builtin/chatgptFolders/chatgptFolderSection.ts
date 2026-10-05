@@ -15,6 +15,7 @@ import {
  */
 import type { FolderData } from '@/core/types/folder';
 import type { ConversationSortMode } from '@/features/folder/model/folderData';
+import { FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 import { hasSeenCoachmark } from '@/pages/content/coachmark';
 import panelCss from '@/pages/content/folder/floatingPanel.css?raw';
 import {
@@ -80,6 +81,7 @@ const SITE: TreeSiteOptions = {
   folderDrag: true,
   conversationHref: (conversation) => readChatGptConversation(conversation.url)?.url ?? '',
   folderToggleDelayMs: FOLDER_TOGGLE_DELAY_MS,
+  conversationIdentity: FOLDER_SITE_POLICIES.chatgpt,
 };
 
 export type ChatGptFolderSectionOptions = {

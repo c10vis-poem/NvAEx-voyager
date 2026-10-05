@@ -209,6 +209,7 @@ export function mountFolderTree({
       const reorders =
         next.folderOrder !== currentSite?.folderOrder ||
         next.conversationOrder !== currentSite?.conversationOrder ||
+        next.conversationIdentity !== currentSite?.conversationIdentity ||
         next.rootSection?.labelKey !== currentSite?.rootSection?.labelKey ||
         next.filter !== currentSite?.filter;
       currentSite = next;

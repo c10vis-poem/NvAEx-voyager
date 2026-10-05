@@ -14,7 +14,7 @@ import type { ConversationReference } from '@/core/types/folder';
 import { createToaster } from '@/core/ui/toast/toaster';
 import type { ToastTone } from '@/core/ui/toast/types';
 import type { EditOutcome, FolderCommands } from '@/features/folder/commands/folderCommands';
-import type { AddVia } from '@/features/folder/owner/folderOwnerPolicy';
+import { type AddVia, FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 import { FolderImportExportService } from '@/features/folder/services/FolderImportExportService';
 import type { PluginScope } from '@/features/plugins/runtime/pluginScope';
 import type { PluginSettings } from '@/features/plugins/types';
@@ -369,6 +369,7 @@ class ChatGptFoldersView {
     this.panel = mountFloatingPanel({
       data: store.data,
       rootBucketId: CHATGPT_FOLDER_CONFIG.rootBucketId,
+      conversationIdentity: FOLDER_SITE_POLICIES.chatgpt,
       dataReady: store.ready,
       hintKeys: HINT_KEYS,
       onCloudUpload: () => void uploadChatGptFolders(this.cloudHost),

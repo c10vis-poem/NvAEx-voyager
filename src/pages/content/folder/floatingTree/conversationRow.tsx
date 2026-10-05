@@ -156,7 +156,7 @@ export function ConversationRow({
           active={conv.starred}
           onClick={(e) => {
             e.stopPropagation();
-            actions.onToggleStar?.(bucketId, conv.conversationId);
+            actions.onToggleStar?.(conv.conversationId, !conv.starred);
           }}
         />
         <IconButton
