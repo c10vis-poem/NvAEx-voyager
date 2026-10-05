@@ -149,7 +149,7 @@ export function createLegacyChatGptCommands(store: ChatGptFolderStore): FolderCo
     restoreNativeTitle: (body) => applyOp(body),
     setConversationGem: unsupported,
     markConversationOpened: (body) => applyOp(body, 'opened'),
-    setConversationActivity: unsupported,
+    setConversationActivity: (body) => applyOp(body, 'activity'),
   };
 
   async function importFile(payload: unknown): Promise<EditOutcome> {

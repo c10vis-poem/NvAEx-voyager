@@ -252,7 +252,11 @@ describe('ChatGPT folder section: collapse', () => {
     expect(collapseToggle().getAttribute('aria-expanded')).toBe('false');
     expect(collapseToggle().textContent).toBe(label('floatingPanelTitle'));
     expect(view.outline()).toEqual([]);
-    expect(memory.values.local.get(PREFS_KEY)).toEqual({ collapsed: true, sortMode: 'manual' });
+    expect(memory.values.local.get(PREFS_KEY)).toEqual({
+      collapsed: true,
+      sortMode: 'manual',
+      viewMode: 'folders',
+    });
 
     const again = await reactivate();
     expect(collapseToggle().getAttribute('aria-expanded')).toBe('false');
@@ -288,7 +292,11 @@ describe('ChatGPT folder section: conversation order', () => {
 
     expect(view.outline().slice(0, 4)).toEqual(['Work', '  · Gamma', '  · Beta plan', '  · Alpha']);
     expect(sortToggle().getAttribute('aria-pressed')).toBe('true');
-    expect(memory.values.local.get(PREFS_KEY)).toEqual({ collapsed: false, sortMode: 'recent' });
+    expect(memory.values.local.get(PREFS_KEY)).toEqual({
+      collapsed: false,
+      sortMode: 'recent',
+      viewMode: 'folders',
+    });
     expect(folderWrites()).toBe(writes);
 
     const again = await reactivate();

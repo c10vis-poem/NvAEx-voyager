@@ -1,3 +1,4 @@
+import { createBellIcon } from '@/core/icons/bellIcon';
 import {
   createCircleCheckIcon,
   createClockArrowDownIcon,
@@ -44,6 +45,11 @@ import { closeFolderHeaderMenu } from '@/pages/content/folder/folderHeader/folde
 import type { SelectionToolbarIcon } from '@/pages/content/folder/selectionToolbar';
 import { type ShadowSurface, attachShadowSurface } from '@/pages/content/folder/shadowHost';
 import {
+  ACTIVITY_LIST_CSS,
+  SidebarActivityList,
+  type SidebarActivityListOptions,
+} from '@/pages/content/folder/sidebarActivityList';
+import {
   type FolderSearchCriteria,
   createSidebarFilter,
   searchAndSortOptions,
@@ -60,6 +66,7 @@ import type { ChatGptFolderSectionPrefs } from './sectionPrefs';
 
 export const FOLDER_SECTION_CLASS = 'gv-chatgpt-folder-section';
 const SORT_TOGGLE_CLASS = `${FOLDER_SECTION_CLASS}__sort`;
+const ACTIVITY_TOGGLE_CLASS = `${FOLDER_SECTION_CLASS}__activity`;
 
 /** Header icons, at the size of Gemini's folder header icons. */
 export const SECTION_ICON_SIZE = 18;
@@ -98,6 +105,11 @@ export type ChatGptFolderSectionOptions = {
     toolbar: HTMLElement;
     isConversationSelected: NonNullable<TreeSiteOptions['isConversationSelected']>;
   };
+  /**
+   * The Activity view (recent chats by last send) and its bell, offered only
+   * where the page records when chats were last sent to.
+   */
+  activity?: Omit<SidebarActivityListOptions, 'store' | 'onExpire'>;
 };
 
 export class ChatGptFolderSection {
@@ -112,6 +124,9 @@ export class ChatGptFolderSection {
   private readonly content: HTMLElement;
   private readonly search: FolderSearchBox;
   private readonly tree: FolderTreeController;
+  /** The Activity view's rows, shown in place of the tree. */
+  private readonly activityBody: HTMLElement;
+  private readonly activity: SidebarActivityList | null;
   private readonly onPrefsChange: (prefs: ChatGptFolderSectionPrefs) => void;
   private readonly isConversationSelected: TreeSiteOptions['isConversationSelected'];
   private activeConversationId: string | null = null;
@@ -132,6 +147,7 @@ export class ChatGptFolderSection {
     prefs,
     onPrefsChange,
     selection,
+    activity,
   }: ChatGptFolderSectionOptions) {
     this.data = data;
     this.isConversationSelected = selection?.isConversationSelected;
@@ -169,6 +185,20 @@ export class ChatGptFolderSection {
           onClick: () =>
             this.setPrefs({ sortMode: this.prefs.sortMode === 'recent' ? 'manual' : 'recent' }),
         },
+        ...(activity
+          ? [
+              {
+                className: ACTIVITY_TOGGLE_CLASS,
+                icon: () => createBellIcon(SECTION_ICON_SIZE),
+                reveal: true,
+                pressed: this.prefs.viewMode === 'activity',
+                onClick: () =>
+                  this.prefs.viewMode === 'activity'
+                    ? this.setPrefs({ viewMode: 'folders' })
+                    : this.setPrefs({ viewMode: 'activity', collapsed: false }),
+              },
+            ]
+          : []),
         ...headerActions.map((action) => ({ ...action, reveal: true })),
         {
           className: `${FOLDER_SECTION_CLASS}__create`,
@@ -176,7 +206,9 @@ export class ChatGptFolderSection {
           icon: () => createPlusIcon(SECTION_ICON_SIZE),
           labelKey: 'floatingPanelCreateFolder',
           onClick: () => {
-            if (this.prefs.collapsed) this.setPrefs({ collapsed: false });
+            // The new folder's name is typed into the tree.
+            if (this.prefs.collapsed || this.activityMode)
+              this.setPrefs({ collapsed: false, viewMode: 'folders' });
             this.tree.apply({
               inlineEditor: { mode: 'create', parentId: null },
               contextMenu: null,
@@ -207,9 +239,23 @@ export class ChatGptFolderSection {
     this.selectionBar = document.createElement('div');
     this.selectionBar.className = `${FOLDER_SECTION_CLASS}__selection`;
     if (selection) this.selectionBar.append(selection.toolbar);
-    this.content.append(this.search.element, this.selectionBar, this.body);
+    this.activityBody = document.createElement('div');
+    this.activityBody.className = 'gv-folder-activity-list';
+    this.content.append(this.search.element, this.selectionBar, this.body, this.activityBody);
+    const currentData = () => this.data;
+    this.activity = activity
+      ? new SidebarActivityList({
+          ...activity,
+          store: {
+            get data() {
+              return currentData();
+            },
+          },
+          onExpire: () => this.showView(),
+        })
+      : null;
 
-    const css = `${panelCss}\n${FOLDER_HEADER_CSS}\n${sectionCss}`;
+    const css = `${panelCss}\n${FOLDER_HEADER_CSS}\n${ACTIVITY_LIST_CSS}\n${sectionCss}`;
     this.surface = attachShadowSurface(this.element, css);
     this.surface.root.append(header, this.content);
 
@@ -268,13 +314,15 @@ export class ChatGptFolderSection {
     this.data = data;
     this.layoutHeld = false;
     this.tree.update(data);
+    if (this.activityMode) this.showView();
   }
 
   /**
-   * New data in which only open times changed. While the pointer is over the
-   * section the rows stay put: opening a chat on a double-click's first click
-   * would otherwise move another chat under its second. The recent order
-   * catches up once the pointer leaves, as Gemini's does on its next render.
+   * New data in which only open or send times changed. While the pointer is
+   * over the section the rows stay put: opening a chat on a double-click's
+   * first click would otherwise move another chat under its second. The recent
+   * order and the Activity view catch up once the pointer leaves, as Gemini's
+   * do on their next render.
    */
   updateOpened(data: FolderData): void {
     if (!this.pointerInside) {
@@ -300,9 +348,13 @@ export class ChatGptFolderSection {
   setDataReady(ready: boolean): void {
     this.body.inert = !ready;
     this.body.setAttribute('aria-busy', String(!ready));
+    this.activityBody.inert = !ready;
     setFolderHeaderDisabled(this.header, !ready);
-    // The sort toggle only reorders what is shown, so it works while data loads.
-    this.header.querySelector<HTMLButtonElement>(`.${SORT_TOGGLE_CLASS}`)!.disabled = false;
+    // The sort and view toggles only change what is shown, so they work while data loads.
+    for (const toggle of [SORT_TOGGLE_CLASS, ACTIVITY_TOGGLE_CLASS]) {
+      const button = this.header.querySelector<HTMLButtonElement>(`.${toggle}`);
+      if (button) button.disabled = false;
+    }
   }
 
   /** True while the section's own folder menu or name field is open. */
@@ -316,6 +368,7 @@ export class ChatGptFolderSection {
   }
 
   destroy(): void {
+    this.activity?.clear();
     closeFolderHeaderMenu();
     this.search.cancel();
     this.tree.destroy();
@@ -333,6 +386,21 @@ export class ChatGptFolderSection {
     };
   }
 
+  /** The Activity view is offered and chosen. */
+  private get activityMode(): boolean {
+    return !!this.activity && this.prefs.viewMode === 'activity';
+  }
+
+  /** Shows the tree, or redraws the Activity view in its place. */
+  private showView(): void {
+    const activity = this.activityMode;
+    this.body.hidden = activity;
+    this.activityBody.hidden = !activity;
+    this.activityBody.replaceChildren();
+    if (activity) this.activity!.populate(this.activityBody, this.searchCriteria(), false);
+    else this.activity?.clear();
+  }
+
   private searchCriteria(): FolderSearchCriteria | null {
     return searchCriteriaOf(this.searchQuery);
   }
@@ -344,12 +412,14 @@ export class ChatGptFolderSection {
       ? createSidebarFilter({ search, currentUserOnly: false }, () => this.data)
       : undefined;
     this.tree.setSite(this.site());
+    if (this.activityMode) this.showView();
   }
 
   private setPrefs(change: Partial<ChatGptFolderSectionPrefs>): void {
     const sortChanged = change.sortMode !== undefined && change.sortMode !== this.prefs.sortMode;
+    const viewChanged = change.viewMode !== undefined && change.viewMode !== this.prefs.viewMode;
     this.prefs = { ...this.prefs, ...change };
-    this.showPrefs();
+    this.showPrefs(viewChanged);
     if (sortChanged) {
       this.layoutHeld = false;
       this.tree.setSite(this.site());
@@ -358,15 +428,24 @@ export class ChatGptFolderSection {
     this.onPrefsChange({ ...this.prefs });
   }
 
-  private showPrefs(): void {
+  /** `redraw`: the view changed, so the tree or the Activity view is shown anew. */
+  private showPrefs(redraw = true): void {
     const { collapsed, sortMode } = this.prefs;
     this.content.hidden = collapsed;
     setFolderHeaderCollapsed(this.header, collapsed);
     const recent = sortMode === 'recent';
+    const activity = this.activityMode;
     setFolderHeaderAction(this.header, SORT_TOGGLE_CLASS, {
+      // Activity has its own order.
+      hidden: activity,
       pressed: recent,
       label: t('folder_sort_recent'),
       title: `${t('folder_sort')}: ${t(recent ? 'folder_sort_recent' : 'folder_sort_manual')}`,
     });
+    setFolderHeaderAction(this.header, ACTIVITY_TOGGLE_CLASS, {
+      pressed: activity,
+      label: t(activity ? 'folder_activity_turn_off' : 'folder_activity_turn_on'),
+    });
+    if (redraw) this.showView();
   }
 }

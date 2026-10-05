@@ -475,6 +475,43 @@
   line-height: 20px;
 }
 
+/* ─── Activity: the shared list on the rows' column, in ChatGPT's colours ─ */
+/* Titles start 16px into the section, under the header's; two-line rows keep
+ * the list's own height, in the page's font and row weight. */
+:host(.gv-chatgpt-folder-section[data-gv-scheme]) .gv-folder-activity-list {
+  --gv-folder-activity-text: var(--gv-floating-folder-panel__text);
+  --gv-folder-activity-muted: var(--gv-chatgpt-folder-section__heading);
+  --gv-folder-activity-hover: var(--gv-floating-folder-panel__surface-hover);
+  --gv-folder-activity-edge: 6px;
+  --gv-folder-activity-row-inset: 10px;
+}
+
+:host(.gv-chatgpt-folder-section)
+  :is(
+    .gv-folder-activity-heading,
+    .gv-folder-activity-text .gv-conversation-title,
+    .gv-folder-activity-context,
+    .gv-folder-activity-time,
+    .gv-folder-activity-empty
+  ) {
+  font-family: inherit;
+}
+
+:host(.gv-chatgpt-folder-section) .gv-folder-activity-text .gv-conversation-title {
+  font-weight: 400;
+}
+
+:host(.gv-chatgpt-folder-section) .gv-folder-activity-item {
+  border-radius: var(--gv-chatgpt-folder-section__row-radius);
+}
+
+:host(.gv-chatgpt-folder-section) .gv-folder-activity-empty {
+  padding-inline: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  opacity: 1;
+}
+
 /* ─── Folder menu: ChatGPT's menu shape, in the page's font ────────────── */
 /* The layer is a child of body: the page's font, not the panel's. */
 :host(.gv-folder-tree-popover-layer) {

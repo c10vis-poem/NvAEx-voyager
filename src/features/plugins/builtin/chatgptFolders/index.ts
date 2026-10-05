@@ -17,7 +17,7 @@ import type { EditOutcome, FolderCommands } from '@/features/folder/commands/fol
 import { type AddVia, FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 import { FolderImportExportService } from '@/features/folder/services/FolderImportExportService';
 import type { PluginScope } from '@/features/plugins/runtime/pluginScope';
-import type { PluginSettings } from '@/features/plugins/types';
+import type { PluginSettings, SiteAdapter } from '@/features/plugins/types';
 import { FolderSelection } from '@/pages/content/folder/FolderSelection';
 import { createCommandTreeActions } from '@/pages/content/folder/commandTreeActions';
 import { mountFloatingFab, unmountFloatingFab } from '@/pages/content/folder/floatingModeFab';
@@ -55,6 +55,7 @@ import {
 } from './chatgptFolderSection';
 import { ChatGptHideFiled, HIDE_FILED_SETTING } from './chatgptHideFiled';
 import { bareConversationId, readChatGptConversation } from './chatgptIdentity';
+import { type ChatGptTurnSelectors, trackChatGptLastTurn } from './chatgptLastTurn';
 import { ChatGptMoveMenu, MOVE_ENTRY_ATTR } from './chatgptMoveMenu';
 import { openNativeRename } from './chatgptNativeRename';
 import { openChatGptConversation, readCurrentConversation } from './chatgptPage';
@@ -117,8 +118,11 @@ class ChatGptFoldersView {
     private readonly renameNative: (conversation: ConversationReference) => void,
   ) {}
 
-  /** Mounts the sidebar section, which owns `sectionPrefs` from here on. */
-  start(sectionPrefs: ChatGptFolderSectionPrefs): void {
+  /**
+   * Mounts the sidebar section, which owns `sectionPrefs` from here on. It
+   * offers the Activity view only when the page records send times (`activity`).
+   */
+  start(sectionPrefs: ChatGptFolderSectionPrefs, activity: boolean): void {
     this.scope.child(this.toaster, 'chatgpt-folders:toasts');
     this.scope.effect(() => () => this.showFloatingEntry(false), 'chatgpt-folders:fab');
     this.scope.effect(
@@ -173,6 +177,18 @@ class ChatGptFoldersView {
         },
         prefs: sectionPrefs,
         onPrefsChange: (prefs) => void saveSectionPrefs(prefs),
+        activity: activity
+          ? {
+              commands: this.commands,
+              navigation: {
+                getConversationHref: (conversation) =>
+                  readChatGptConversation(conversation.url)?.url ?? '',
+                navigate: (conversation) => void openChatGptConversation(conversation),
+              },
+              dialogs: this.dialogs,
+              onRenameNative: this.renameNative,
+            }
+          : undefined,
         selection: {
           toolbar: selection.createMultiSelectIndicator(),
           isConversationSelected: (conversation, bucketId) =>
@@ -235,7 +251,7 @@ class ChatGptFoldersView {
     // The panel keeps the manual order, which an open does not change.
     this.panel?.update(data);
     this.panel?.setDataReady(ready);
-    if (change === 'opened') this.section?.updateOpened(data);
+    if (change === 'opened' || change === 'activity') this.section?.updateOpened(data);
     else this.section?.update(data);
     this.section?.setDataReady(ready);
   }
@@ -501,9 +517,17 @@ function importNotice(outcome: EditOutcome): Notice | null {
   }
 }
 
+/** The page's selectors for a user message and the prompt, when its adapter names both. */
+function turnSelectorsOf(adapter: SiteAdapter | null): ChatGptTurnSelectors | null {
+  const userTurn = adapter?.selectors.userTurn;
+  const composer = adapter?.selectors.composer;
+  return userTurn && composer ? { userTurn, composer } : null;
+}
+
 export async function activateChatGptFolders(
   scope: PluginScope,
   settings: PluginSettings = {},
+  adapter: SiteAdapter | null = null,
 ): Promise<void> {
   await initI18n();
   if (scope.isDisposed) return;
@@ -529,7 +553,16 @@ export async function activateChatGptFolders(
   const view = new ChatGptFoldersView(scope, store, commands, prefs, (c) => {
     void renameNative(c);
   });
-  view.start(sectionPrefs);
+  const turnSelectors = turnSelectorsOf(adapter);
+  view.start(sectionPrefs, turnSelectors !== null);
+  if (turnSelectors) {
+    trackChatGptLastTurn(scope, turnSelectors, (conversationId, lastTurnAt) => {
+      void commands.run({
+        kind: 'setConversationActivity',
+        entries: [{ conversationId, lastTurnAt }],
+      });
+    });
+  }
   const sidebar = new ChatGptSidebarWatcher(scope);
   const moveMenu = new ChatGptMoveMenu({
     label: () => t('conversation_move_to_folder'),

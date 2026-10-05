@@ -27,9 +27,10 @@ export type MoveOutcome = 'moved' | 'unchanged' | 'missing' | 'closed';
 
 /**
  * What a change to the folders was. `opened`: only the time a conversation was
- * opened, which the recent order reads; nothing else in the data moved.
+ * opened, which the recent order reads; `activity`: only when one was last
+ * sent to, which the Activity view reads. Nothing else in the data moved.
  */
-export type ChatGptFolderChange = 'data' | 'opened';
+export type ChatGptFolderChange = 'data' | 'opened' | 'activity';
 
 /**
  * ChatGPT folder commands over the shared FolderRepository, which owns load,
@@ -231,7 +232,7 @@ export class ChatGptFolderStore {
 
   /**
    * Commits `next`, a snapshot computed from `data` (a shared owner op's result).
-   * `opened`: it only stamps when a conversation was opened. Returns whether it changed.
+   * `change` says what it stamps, if only a time. Returns whether it changed.
    */
   apply(next: FolderData, change: ChatGptFolderChange = 'data'): boolean {
     if (!this.ready || next === this.data) return false;
