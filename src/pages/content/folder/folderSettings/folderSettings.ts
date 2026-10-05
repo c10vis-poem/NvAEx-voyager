@@ -5,6 +5,7 @@
  */
 import browser from 'webextension-polyfill';
 
+import { createMinusIcon, createPlusIcon } from '@/core/icons/folderIcons';
 import { StorageKeys } from '@/core/types/common';
 import type { ConversationSortMode } from '@/features/folder/model/folderData';
 import { getTranslationSyncUnsafe as t } from '@/utils/i18n';
@@ -14,6 +15,7 @@ import {
   type FolderDisplaySetting,
   clampFolderDisplay,
 } from '../folderDisplay';
+import { openFolderHeaderPopover } from '../folderHeader/folderHeaderMenu';
 import { ensurePageSheet } from '../pageSheet';
 import settingsCss from './folderSettings.css?raw';
 
@@ -33,6 +35,13 @@ export type FolderSettingsOptions = {
   onSortModeChange: (mode: ConversationSortMode) => void;
   /** Gemini's sidebar width; the other sites' sidebars are not Voyager's to size. */
   sidebarWidth?: boolean;
+  /** The page has Material Symbols (Gemini), so the steppers use ligatures; elsewhere SVG. */
+  symbolFont?: boolean;
+  /**
+   * The value a display setting shows until the user stores one, by storage
+   * key: the site's own metric, which its tree keeps while the key is unset.
+   */
+  displayDefaults?: Readonly<Partial<Record<string, number>>>;
 };
 
 /** Adds the settings sheet to the page once, for a popover in page DOM. */
@@ -40,12 +49,36 @@ export function ensureFolderSettingsStyle(doc: Document = document): void {
   ensurePageSheet(PAGE_STYLE_CLASS, settingsCss, doc);
 }
 
+/**
+ * Opens the settings below `anchor`, a header button, in the header menus'
+ * body-level popover: for a site whose folders live in a shadow root.
+ */
+export function openFolderSettingsPopover(
+  anchor: HTMLButtonElement,
+  options: FolderSettingsOptions,
+): void {
+  openFolderHeaderPopover(anchor, {
+    popup: 'dialog',
+    css: settingsCss,
+    fill: (container) => {
+      container.classList.add(FOLDER_SETTINGS_CLASS);
+      container.setAttribute('aria-label', t('folder_settings'));
+      renderFolderSettings(container, options);
+      return container.querySelector<HTMLButtonElement>('.gv-folder-sort-option.is-active');
+    },
+  });
+}
+
 /** Fills `menu`, a popover carrying `FOLDER_SETTINGS_CLASS`, with the settings rows. */
 export function renderFolderSettings(menu: HTMLElement, options: FolderSettingsOptions): void {
   menu.appendChild(createConversationSortSettingsRow(options.sortMode, options.onSortModeChange));
   if (options.sidebarWidth) menu.appendChild(createSidebarWidthSettingsRow());
-  for (const setting of FOLDER_DISPLAY_SETTINGS)
-    menu.appendChild(createSettingsStepperRow(setting));
+  for (const setting of FOLDER_DISPLAY_SETTINGS) {
+    const defaultValue = options.displayDefaults?.[setting.storageKey] ?? setting.defaultValue;
+    menu.appendChild(
+      createSettingsStepperRow({ ...setting, defaultValue }, options.symbolFont === true),
+    );
+  }
   // Disabled stepper buttons can retarget a click in some browsers.
   // Keep interactions with the entire settings panel inside this popover.
   menu.addEventListener('click', (click) => click.stopPropagation());
@@ -217,7 +250,17 @@ function createSidebarWidthSettingsRow(): HTMLElement {
   return row;
 }
 
-function createSettingsStepperRow(config: FolderDisplaySetting): HTMLElement {
+function stepIcon(step: 'remove' | 'add', symbolFont: boolean): Node {
+  if (!symbolFont) return step === 'add' ? createPlusIcon(16) : createMinusIcon(16);
+  const icon = document.createElement('mat-icon');
+  icon.setAttribute('role', 'img');
+  icon.className = 'mat-icon notranslate google-symbols mat-ligature-font mat-icon-no-color';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = step;
+  return icon;
+}
+
+function createSettingsStepperRow(config: FolderDisplaySetting, symbolFont: boolean): HTMLElement {
   const { labelKey, storageKey, min, max, defaultValue, unit } = config;
   const clamp = (n: unknown) => clampFolderDisplay(config, n);
 
@@ -234,7 +277,7 @@ function createSettingsStepperRow(config: FolderDisplaySetting): HTMLElement {
   const minus = document.createElement('button');
   minus.className = 'gv-folder-stepper-btn';
   minus.type = 'button';
-  minus.innerHTML = `<mat-icon role="img" class="mat-icon notranslate google-symbols mat-ligature-font mat-icon-no-color" aria-hidden="true">remove</mat-icon>`;
+  minus.appendChild(stepIcon('remove', symbolFont));
   minus.title = t('folder_item_font_size_decrease');
 
   const value = document.createElement('span');
@@ -243,7 +286,7 @@ function createSettingsStepperRow(config: FolderDisplaySetting): HTMLElement {
   const plus = document.createElement('button');
   plus.className = 'gv-folder-stepper-btn';
   plus.type = 'button';
-  plus.innerHTML = `<mat-icon role="img" class="mat-icon notranslate google-symbols mat-ligature-font mat-icon-no-color" aria-hidden="true">add</mat-icon>`;
+  plus.appendChild(stepIcon('add', symbolFont));
   plus.title = t('folder_item_font_size_increase');
 
   let current = defaultValue;

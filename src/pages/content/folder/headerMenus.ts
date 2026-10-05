@@ -95,7 +95,12 @@ export function createFolderHeaderMenus(): FolderHeaderMenus {
       const menu = open(event, `gv-folder-menu ${FOLDER_SETTINGS_CLASS}`);
       if (!menu) return;
       ensureFolderSettingsStyle();
-      renderFolderSettings(menu, { sortMode, onSortModeChange, sidebarWidth: true });
+      renderFolderSettings(menu, {
+        sortMode,
+        onSortModeChange,
+        sidebarWidth: true,
+        symbolFont: true,
+      });
     },
     close,
   };

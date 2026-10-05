@@ -87,20 +87,26 @@ export function folderDisplayProperties(
 }
 
 /**
- * Calls `onValue` with the value stored under `key` in sync storage (undefined
- * while unset), then with each change to it. Returns the stop.
+ * Calls `onValue` with the value stored under each of `keys` in sync storage
+ * (undefined while unset), then with each change to one; one listener for all.
+ * Returns the stop.
  */
-export function watchSyncSetting(key: string, onValue: (value: unknown) => void): () => void {
+export function watchSyncSettings(
+  keys: readonly string[],
+  onValue: (key: string, value: unknown) => void,
+): () => void {
   let stopped = false;
   try {
-    chrome.storage?.sync?.get(key, (stored) => {
-      if (!stopped) onValue(stored?.[key]);
+    chrome.storage?.sync?.get([...keys], (stored) => {
+      if (stopped) return;
+      for (const key of keys) onValue(key, stored?.[key]);
     });
   } catch {
     // An invalidated context: the defaults stay.
   }
   const onChanged = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-    if (area === 'sync' && changes[key]) onValue(changes[key].newValue);
+    if (area !== 'sync') return;
+    for (const key of keys) if (changes[key]) onValue(key, changes[key].newValue);
   };
   chrome.storage?.onChanged?.addListener(onChanged);
   return () => {
@@ -110,5 +116,41 @@ export function watchSyncSetting(key: string, onValue: (value: unknown) => void)
     } catch {
       // ignore
     }
+  };
+}
+
+/** `watchSyncSettings` for one key. */
+export function watchSyncSetting(key: string, onValue: (value: unknown) => void): () => void {
+  return watchSyncSettings([key], (_key, value) => onValue(value));
+}
+
+/**
+ * Follows the display settings on `target`, a tree's shadow host outside
+ * Gemini. A setting the user never stored is left off, so the site's sheet
+ * keeps its own metrics until one is chosen. Returns the stop, which also
+ * clears the properties.
+ */
+export function applyFolderDisplay(target: HTMLElement): () => void {
+  const applied = new Set<string>();
+  const stop = watchSyncSettings(
+    FOLDER_DISPLAY_SETTINGS.map((setting) => setting.storageKey),
+    (key, value) => {
+      const setting = FOLDER_DISPLAY_SETTINGS.find((candidate) => candidate.storageKey === key)!;
+      const properties = folderDisplayProperties(setting, clampFolderDisplay(setting, value));
+      for (const [name, propertyValue] of Object.entries(properties)) {
+        if (value === undefined) {
+          target.style.removeProperty(name);
+          applied.delete(name);
+        } else {
+          target.style.setProperty(name, propertyValue);
+          applied.add(name);
+        }
+      }
+    },
+  );
+  return () => {
+    stop();
+    for (const name of applied) target.style.removeProperty(name);
+    applied.clear();
   };
 }

@@ -23,6 +23,8 @@ export const FOLDER_ICON_NODE = [
   ],
 ] satisfies IconNode;
 
+const MINUS_ICON_NODE = [['path', { d: 'M5 12h14', key: '1ays0h' }]] satisfies IconNode;
+
 export const PLUS_ICON_NODE = [
   ['path', { d: 'M5 12h14', key: '1ays0h' }],
   ['path', { d: 'M12 5v14', key: 's699le' }],
@@ -69,22 +71,10 @@ export const CHECK_ICON_NODE = [
   ['path', { d: 'M20 6 9 17l-5-5', key: '1gmf2c' }],
 ] satisfies IconNode;
 
-const DOWNLOAD_ICON_NODE = [
-  ['path', { d: 'M12 15V3', key: 'm9g1x1' }],
-  ['path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', key: 'ih7n3h' }],
-  ['path', { d: 'm7 10 5 5 5-5', key: 'brsn70' }],
-] satisfies IconNode;
-
 export const ELLIPSIS_ICON_NODE = [
   ['circle', { cx: '12', cy: '12', r: '1', key: '41hilf' }],
   ['circle', { cx: '19', cy: '12', r: '1', key: '1wjl8i' }],
   ['circle', { cx: '5', cy: '12', r: '1', key: '1pcz8c' }],
-] satisfies IconNode;
-
-const UPLOAD_ICON_NODE = [
-  ['path', { d: 'M12 3v12', key: '1x0j5s' }],
-  ['path', { d: 'm17 8-5-5-5 5', key: '7q97r8' }],
-  ['path', { d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', key: 'ih7n3h' }],
 ] satisfies IconNode;
 
 const CIRCLE_CHECK_ICON_NODE = [
@@ -121,6 +111,10 @@ export function createFolderIcon(size = 16): SVGSVGElement {
   return createLucideIcon('folder', FOLDER_ICON_NODE, size);
 }
 
+export function createMinusIcon(size = 16): SVGSVGElement {
+  return createLucideIcon('minus', MINUS_ICON_NODE, size);
+}
+
 export function createPlusIcon(size = 16): SVGSVGElement {
   return createLucideIcon('plus', PLUS_ICON_NODE, size);
 }
@@ -137,14 +131,6 @@ export function createStarIcon(size = 16, filled = false): SVGSVGElement {
 
 export function createUserRoundIcon(size = 16): SVGSVGElement {
   return createLucideIcon('user-round', USER_ROUND_ICON_NODE, size);
-}
-
-export function createDownloadIcon(size = 16): SVGSVGElement {
-  return createLucideIcon('download', DOWNLOAD_ICON_NODE, size);
-}
-
-export function createUploadIcon(size = 16): SVGSVGElement {
-  return createLucideIcon('upload', UPLOAD_ICON_NODE, size);
 }
 
 export function createCircleCheckIcon(size = 16): SVGSVGElement {

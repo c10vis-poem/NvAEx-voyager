@@ -19,6 +19,7 @@ import { initI18n, getTranslationSyncUnsafe as t } from '@/utils/i18n';
 import { activateChatGptFolders } from '../index';
 import { type SidebarFixture, makeRows, mountSidebarFixture } from './chatgptSidebarFixture';
 import { type MemoryStorage, createMemoryStorage, settle } from './memoryStorage';
+import { headerLabels } from './sectionHeaderDriver';
 
 vi.mock('webextension-polyfill', () => ({
   default: {
@@ -390,20 +391,22 @@ describe('ChatGPT folder Activity', () => {
     expect(lastTurnAt(WORK_CHAT)).toBe(NOON);
   });
 
+  it('the header shows exactly Activity, import/export, cloud, settings and create, in that order', async () => {
+    await activate();
+
+    expect(headerLabels()).toEqual([
+      t('folder_activity_turn_on'),
+      t('folder_import_export'),
+      t('folder_cloud'),
+      t('folder_settings'),
+      t('floatingPanelCreateFolder'),
+    ]);
+  });
+
   it('the ChatGPT bell shows the activity list with a just-sent chat under Priority', async () => {
     history.replaceState(null, '', `/c/${WORK_CHAT}`);
     await activate();
     await send('Ship it');
-    // The bell is the header's only view control; recency has no toggle of its own.
-    const header = [...shadow().querySelectorAll('.gv-folder-header-actions button')];
-    expect(header.map((button) => button.getAttribute('aria-label'))).toEqual([
-      t('folder_activity_turn_on'),
-      t('folder_import'),
-      t('folder_export'),
-      t('folder_cloud'),
-      t('floatingPanelCreateFolder'),
-    ]);
-
     bell().click();
     await nextPass();
 

@@ -1,16 +1,18 @@
 import browser from 'webextension-polyfill';
 
 import { StorageKeys } from '@/core/types/common';
+import type { ConversationSortMode } from '@/features/folder/model/folderData';
 import type { FolderViewMode } from '@/pages/content/folder/activityView';
+import { toSortMode } from '@/pages/content/folder/sidebarPrefs';
 
 /**
  * The sidebar section's own view state on this device; Gemini's keys stay
  * Gemini's. Older builds drop `viewMode` on their next save and show folders.
- * A `sortMode` older builds stored stays unread: ChatGPT folders keep their
- * manual order, so a saved recent order cannot strand the user.
+ * `sortMode` is chosen in the folder settings popover.
  */
 export type ChatGptFolderSectionPrefs = {
   collapsed: boolean;
+  sortMode: ConversationSortMode;
   viewMode: FolderViewMode;
 };
 
@@ -18,6 +20,7 @@ function parseSectionPrefs(value: unknown): ChatGptFolderSectionPrefs {
   const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   return {
     collapsed: raw.collapsed === true,
+    sortMode: toSortMode(raw.sortMode),
     viewMode: raw.viewMode === 'activity' ? 'activity' : 'folders',
   };
 }

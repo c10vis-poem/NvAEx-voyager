@@ -5,7 +5,6 @@
  * shared FolderRepository with ChatGPT's own bucket. Everything this plugin
  * creates is registered on its PluginScope, so turning it off leaves nothing behind.
  */
-import { createDownloadIcon, createUploadIcon } from '@/core/icons/folderIcons';
 import { DOWNLOAD_PATH, UPLOAD_PATH } from '@/core/icons/transferPaths';
 import type { ConversationReference } from '@/core/types/folder';
 import { createToaster } from '@/core/ui/toast/toaster';
@@ -26,7 +25,6 @@ import {
 } from '@/pages/content/folder/floatingTree/dropTargets';
 import type { TreeActions } from '@/pages/content/folder/floatingTree/shared';
 import { createFolderDialogs } from '@/pages/content/folder/folderDialogs';
-import { cloudMenuAction } from '@/pages/content/folder/folderHeader/folderHeader';
 import {
   type SidebarDropContext,
   acceptsSidebarDrag,
@@ -45,11 +43,7 @@ import {
 } from './chatgptCloudSync';
 import { ChatGptFolderGuide } from './chatgptFolderGuide';
 import { type FolderPickerHandle, openFolderPicker } from './chatgptFolderPicker';
-import {
-  ChatGptFolderSection,
-  SECTION_ICON_SIZE,
-  sectionToolbarIcon,
-} from './chatgptFolderSection';
+import { ChatGptFolderSection, sectionToolbarIcon } from './chatgptFolderSection';
 import { ChatGptHideFiled, HIDE_FILED_SETTING } from './chatgptHideFiled';
 import { bareConversationId, readChatGptConversation } from './chatgptIdentity';
 import { type ChatGptTurnSelectors, trackChatGptLastTurn } from './chatgptLastTurn';
@@ -157,7 +151,7 @@ class ChatGptFoldersView {
         commands: this.commands,
         rootBucketId,
         feedback,
-        sortMode: () => 'manual',
+        sortMode: () => section.sortMode,
         conversationIdentity: FOLDER_SITE_POLICIES.chatgpt,
         finish: () => selection.finishDrop(),
       };
@@ -191,27 +185,14 @@ class ChatGptFoldersView {
           isConversationSelected: (conversation, bucketId) =>
             selection.isFolderConversationSelected(conversation.conversationId, bucketId),
         },
-        headerActions: [
-          {
-            className: 'gv-chatgpt-folder-section__import',
-            labelKey: 'folder_import',
-            icon: () => createUploadIcon(SECTION_ICON_SIZE),
-            onClick: () => this.pickImportFile(),
-          },
-          {
-            className: 'gv-chatgpt-folder-section__export',
-            labelKey: 'folder_export',
-            icon: () => createDownloadIcon(SECTION_ICON_SIZE),
-            onClick: () => this.exportFolders(),
-          },
-          cloudMenuAction(
-            {
-              upload: () => void uploadChatGptFolders(this.cloudHost),
-              sync: () => void syncChatGptFolders(this.cloudHost),
-            },
-            { className: 'gv-chatgpt-folder-section__cloud' },
-          ),
-        ],
+        transfer: {
+          import: () => this.pickImportFile(),
+          export: () => this.exportFolders(),
+        },
+        cloud: {
+          upload: () => void uploadChatGptFolders(this.cloudHost),
+          sync: () => void syncChatGptFolders(this.cloudHost),
+        },
       });
       section.setDataReady(this.store.ready);
       // The heading files at the root, as Gemini's does: tree drags, and ChatGPT's row drags.

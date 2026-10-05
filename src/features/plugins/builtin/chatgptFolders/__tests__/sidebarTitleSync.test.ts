@@ -12,6 +12,7 @@ import { activateChatGptFolders } from '../index';
 import { exportChatGptFolders } from '../transfer';
 import { type SidebarFixture, makeRows, mountSidebarFixture } from './chatgptSidebarFixture';
 import { type MemoryStorage, createMemoryStorage, settle } from './memoryStorage';
+import { transfer } from './sectionHeaderDriver';
 
 vi.mock('webextension-polyfill', () => ({
   default: {
@@ -94,8 +95,7 @@ afterEach(async () => {
 async function importFromSection(data: FolderData): Promise<void> {
   // The file picker is never attached to the page; keep its click from opening anything.
   const pick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
-  const section = document.querySelector<HTMLElement>('.gv-chatgpt-folder-section')!.shadowRoot!;
-  section.querySelector<HTMLButtonElement>('button[aria-label="Import folders"]')!.click();
+  transfer('import');
   const json = JSON.stringify(exportChatGptFolders(data));
   const file = new File([json], 'folders.json', { type: 'application/json' });
   // jsdom's File has no text().
