@@ -2641,10 +2641,6 @@
     "message": "将当前对话添加到此处",
     "description": "Floating folder panel folder menu item that files the open conversation into that folder"
   },
-  "chatgptFoldersAddCurrent": {
-    "message": "添加当前对话",
-    "description": "ChatGPT folder panel header button that files the open conversation at the top level"
-  },
   "chatgptFoldersHint": {
     "message": "归档对话：先打开对话，再点击书签按钮，或右键点击文件夹。",
     "description": "ChatGPT folder panel hint explaining how to file a conversation"

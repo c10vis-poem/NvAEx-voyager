@@ -2,8 +2,8 @@
 // @vitest-environment-options { "url": "https://chatgpt.com/" }
 /**
  * The ChatGPT folder section's own view, against its real store and storage:
- * search (with `f:`), collapse and the conversation order, as Gemini's folder
- * sidebar has them, and the open time the recent order reads.
+ * search (with `f:`) and collapse, as Gemini's folder sidebar has them, the
+ * manual conversation order, and the open time it records.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,12 +12,10 @@ import type { FolderData } from '@/core/types/folder';
 import { ROOT_CONVERSATIONS_ID } from '@/features/folder/constants';
 import { PluginScope } from '@/features/plugins/runtime/pluginScope';
 import {
-  type FakeTransfer,
   type TreeDriver,
   label,
   treeDriver,
 } from '@/pages/content/folder/floatingTree/__tests__/treeDriver';
-import { toastDriver } from '@/tests/toastDriver';
 import { initI18n } from '@/utils/i18n';
 
 import { activateChatGptFolders } from '../index';
@@ -135,22 +133,6 @@ async function reactivate(): Promise<TreeDriver> {
   return activate();
 }
 
-/** ChatGPT's router: a sidebar link opens its chat in place. */
-function routeSidebarLinks(): void {
-  sidebar.sidebar.addEventListener('click', (event) => {
-    const link = (event.target as Element).closest<HTMLAnchorElement>('a[href^="/c/"]');
-    if (!link) return;
-    event.preventDefault();
-    const path = link.getAttribute('href')!;
-    history.pushState(null, '', path);
-    sidebar.setActive(path.slice('/c/'.length));
-  });
-}
-
-function pointer(type: 'pointerenter' | 'pointerleave'): void {
-  shadow().host.dispatchEvent(new PointerEvent(type));
-}
-
 function stored(): FolderData {
   return memory.values.local.get(KEY) as FolderData;
 }
@@ -172,33 +154,6 @@ async function search(query: string): Promise<void> {
 
 function collapseToggle(): HTMLButtonElement {
   return shadow().querySelector<HTMLButtonElement>('h2 button')!;
-}
-
-function sortToggle(): HTMLButtonElement {
-  return shadow().querySelector<HTMLButtonElement>(
-    `button[aria-label="${label('folder_sort_recent')}"]`,
-  )!;
-}
-
-function status(): string {
-  return toastDriver.messages().join('\n');
-}
-
-function dragEvent(type: string, transfer: FakeTransfer, clientY = 20): Event {
-  const event = new Event(type, { bubbles: true, cancelable: true, composed: true });
-  Object.defineProperty(event, 'dataTransfer', { value: transfer });
-  Object.defineProperty(event, 'clientY', { value: clientY });
-  return event;
-}
-
-function dropAt(target: HTMLElement, transfer: FakeTransfer, y: number): void {
-  Object.defineProperty(target, 'getBoundingClientRect', {
-    configurable: true,
-    value: () => ({ top: 0, bottom: 40, height: 40, left: 0, right: 200, width: 200 }),
-  });
-  const over = dragEvent('dragover', transfer, y);
-  target.dispatchEvent(over);
-  if (over.defaultPrevented) target.dispatchEvent(dragEvent('drop', transfer, y));
 }
 
 describe('ChatGPT folder section: search', () => {
@@ -254,7 +209,6 @@ describe('ChatGPT folder section: collapse', () => {
     expect(view.outline()).toEqual([]);
     expect(memory.values.local.get(PREFS_KEY)).toEqual({
       collapsed: true,
-      sortMode: 'manual',
       viewMode: 'folders',
     });
 
@@ -278,110 +232,30 @@ describe('ChatGPT folder section: collapse', () => {
 });
 
 describe('ChatGPT folder section: conversation order', () => {
-  it('orders chats by when they were last opened or added, and keeps that order here', async () => {
-    memory.values.local.set(KEY, {
-      ...structuredClone(DATA),
-      folders: DATA.folders.map((f) => ({ ...f, isExpanded: true })),
-    });
-    const view = await activate();
-    expect(view.outline().slice(0, 4)).toEqual(['Work', '  · Alpha', '  · Beta plan', '  · Gamma']);
-    const writes = folderWrites();
-
-    sortToggle().click();
-    await nextPass();
-
-    expect(view.outline().slice(0, 4)).toEqual(['Work', '  · Gamma', '  · Beta plan', '  · Alpha']);
-    expect(sortToggle().getAttribute('aria-pressed')).toBe('true');
-    expect(memory.values.local.get(PREFS_KEY)).toEqual({
-      collapsed: false,
-      sortMode: 'recent',
-      viewMode: 'folders',
-    });
-    expect(folderWrites()).toBe(writes);
-
-    const again = await reactivate();
-    expect(again.outline().slice(0, 4)).toEqual([
-      'Work',
-      '  · Gamma',
-      '  · Beta plan',
-      '  · Alpha',
-    ]);
-  });
-
-  it('in recent order, explains instead of reordering a chat dropped in its own folder', async () => {
+  it('a ChatGPT section saved in recent order shows folders in manual order', async () => {
     memory.values.local.set(PREFS_KEY, { collapsed: false, sortMode: 'recent' });
     memory.values.local.set(KEY, {
       ...structuredClone(DATA),
       folders: DATA.folders.map((f) => ({ ...f, isExpanded: true })),
     });
+
     const view = await activate();
-    const writes = folderWrites();
 
-    dropAt(view.conversationRow('work', 'Gamma'), view.dragRow('work', 'Alpha'), 30);
-    await nextPass();
-
-    expect(status()).toBe(label('folder_sort_recent_drag_hint'));
-    expect(folderWrites()).toBe(writes);
+    // Gamma was opened last and Beta added after Alpha; neither moves them.
+    expect(view.outline()).toEqual([
+      'Work',
+      '  · Alpha',
+      '  · Beta plan',
+      '  · Gamma',
+      'Personal',
+      '  Trips',
+      '    · Delta plan',
+    ]);
   });
 });
 
 describe('ChatGPT folder section: opening a filed chat', () => {
-  it('records when it was opened, which puts it first in recent order', async () => {
-    memory.values.local.set(PREFS_KEY, { collapsed: false, sortMode: 'recent' });
-    memory.values.local.set(KEY, {
-      ...structuredClone(DATA),
-      folders: DATA.folders.map((f) => ({ ...f, isExpanded: true })),
-    });
-    const view = await activate();
-    expect(view.outline().slice(0, 4)).toEqual(['Work', '  · Gamma', '  · Beta plan', '  · Alpha']);
-    const before = Date.now();
-
-    history.pushState(null, '', `/c/${ROWS[0].id}`);
-    sidebar.setActive(ROWS[0].id);
-    await nextPass();
-
-    const alpha = stored().folderContents.work.find((c) => c.title === 'Alpha')!;
-    expect(alpha.lastOpenedAt).toBeGreaterThanOrEqual(before);
-    expect(view.outline().slice(0, 4)).toEqual(['Work', '  · Alpha', '  · Gamma', '  · Beta plan']);
-  });
-
-  it('in recent order, renames the chat a double-click started on, not the one moved under it', async () => {
-    memory.values.local.set(PREFS_KEY, { collapsed: false, sortMode: 'recent' });
-    memory.values.local.set(KEY, {
-      ...structuredClone(DATA),
-      folders: DATA.folders.map((f) => ({ ...f, isExpanded: true })),
-    });
-    const view = await activate();
-    routeSidebarLinks();
-    const order = ['Work', '  · Gamma', '  · Beta plan', '  · Alpha'];
-    expect(view.outline().slice(0, 4)).toEqual(order);
-    const before = Date.now();
-
-    pointer('pointerenter');
-    // The first click opens Beta, which records the open.
-    view.openConversation('work', 'Beta plan');
-    await nextPass();
-    expect(location.pathname).toBe(`/c/${ROWS[1].id}`);
-    const beta = stored().folderContents.work.find((c) => c.title === 'Beta plan')!;
-    expect(beta.lastOpenedAt).toBeGreaterThanOrEqual(before);
-    // Beta is still under the pointer for the second click.
-    expect(view.outline().slice(0, 4)).toEqual(order);
-    view
-      .titleButton('work', 'Beta plan')
-      .dispatchEvent(
-        new MouseEvent('dblclick', { bubbles: true, cancelable: true, composed: true }),
-      );
-    for (let i = 0; i < 4; i += 1) await nextPass();
-
-    expect(sidebar.row(ROWS[1].id).contains(sidebar.nameField())).toBe(true);
-    expect(location.pathname).toBe(`/c/${ROWS[1].id}`);
-
-    pointer('pointerleave');
-    expect(view.outline().slice(0, 4)).toEqual(['Work', '  · Beta plan', '  · Gamma', '  · Alpha']);
-  });
-
   it('records the open of a filed chat with no row in ChatGPT’s sidebar, and marks it open', async () => {
-    memory.values.local.set(PREFS_KEY, { collapsed: false, sortMode: 'recent' });
     const data = structuredClone(DATA);
     data.folders = data.folders.map((f) => ({ ...f, isExpanded: true }));
     // Older than every row ChatGPT has loaded, so its sidebar never shows it.
@@ -395,9 +269,9 @@ describe('ChatGPT folder section: opening a filed chat', () => {
     memory.values.local.set(KEY, data);
     const view = await activate();
     expect(view.outline().slice(1, 5)).toEqual([
-      '  · Gamma',
-      '  · Beta plan',
       '  · Alpha',
+      '  · Beta plan',
+      '  · Gamma',
       '  · Older chat',
     ]);
     const before = Date.now();
@@ -408,7 +282,8 @@ describe('ChatGPT folder section: opening a filed chat', () => {
     expect(location.pathname).toBe('/c/unloaded');
     const older = stored().folderContents.work.find((c) => c.title === 'Older chat')!;
     expect(older.lastOpenedAt).toBeGreaterThanOrEqual(before);
-    expect(view.outline()[1]).toBe('  · Older chat');
+    // Manual order: opening it moves nothing.
+    expect(view.outline()[4]).toBe('  · Older chat');
     expect(view.titleButton('work', 'Older chat').getAttribute('aria-current')).toBe('page');
   });
 

@@ -1,7 +1,6 @@
 import { createBellIcon } from '@/core/icons/bellIcon';
 import {
   createCircleCheckIcon,
-  createClockArrowDownIcon,
   createPlusIcon,
   createTrashIcon,
   createXIcon,
@@ -15,7 +14,6 @@ import {
  * floating panel's button instead.
  */
 import type { FolderData } from '@/core/types/folder';
-import type { ConversationSortMode } from '@/features/folder/model/folderData';
 import { FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 import { hasSeenCoachmark } from '@/pages/content/coachmark';
 import panelCss from '@/pages/content/folder/floatingPanel.css?raw';
@@ -65,7 +63,6 @@ import { findHistoryAnchor } from './chatgptSidebarDom';
 import type { ChatGptFolderSectionPrefs } from './sectionPrefs';
 
 export const FOLDER_SECTION_CLASS = 'gv-chatgpt-folder-section';
-const SORT_TOGGLE_CLASS = `${FOLDER_SECTION_CLASS}__sort`;
 const ACTIVITY_TOGGLE_CLASS = `${FOLDER_SECTION_CLASS}__activity`;
 
 /** Header icons, at the size of Gemini's folder header icons. */
@@ -95,10 +92,10 @@ export type ChatGptFolderSectionOptions = {
   data: FolderData;
   rootBucketId: string;
   actions: TreeActions;
-  /** Buttons between the sort toggle and "Create folder", shown while the header is in use. */
+  /** Buttons between the Activity bell and "Create folder", shown while the header is in use. */
   headerActions?: readonly FolderHeaderAction[];
   prefs: ChatGptFolderSectionPrefs;
-  /** The section was collapsed or its conversation order changed. */
+  /** The section was collapsed or switched between folders and Activity. */
   onPrefsChange: (prefs: ChatGptFolderSectionPrefs) => void;
   /** Long-press multi-select: its toolbar, shown atop the tree, and the rows it holds. */
   selection?: {
@@ -177,14 +174,6 @@ export class ChatGptFolderSection {
       },
       containClicks: true,
       actions: [
-        {
-          className: SORT_TOGGLE_CLASS,
-          icon: () => createClockArrowDownIcon(SECTION_ICON_SIZE),
-          reveal: true,
-          pressed: this.prefs.sortMode === 'recent',
-          onClick: () =>
-            this.setPrefs({ sortMode: this.prefs.sortMode === 'recent' ? 'manual' : 'recent' }),
-        },
         ...(activity
           ? [
               {
@@ -266,7 +255,7 @@ export class ChatGptFolderSection {
       focusRoot: this.surface.root,
       data,
       rootBucketId,
-      conversationSortMode: this.prefs.sortMode,
+      conversationSortMode: 'manual',
       actions: actions.onRenameConversation
         ? {
             ...actions,
@@ -281,11 +270,6 @@ export class ChatGptFolderSection {
       popoverLayer: { css },
     });
     this.showPrefs();
-  }
-
-  /** The conversation order the tree shows, for drops that place by position. */
-  get sortMode(): ConversationSortMode {
-    return this.prefs.sortMode;
   }
 
   /**
@@ -320,9 +304,9 @@ export class ChatGptFolderSection {
   /**
    * New data in which only open or send times changed. While the pointer is
    * over the section the rows stay put: opening a chat on a double-click's
-   * first click would otherwise move another chat under its second. The recent
-   * order and the Activity view catch up once the pointer leaves, as Gemini's
-   * do on their next render.
+   * first click would otherwise move another chat under its second. The
+   * Activity view catches up once the pointer leaves, as Gemini's does on its
+   * next render.
    */
   updateOpened(data: FolderData): void {
     if (!this.pointerInside) {
@@ -350,11 +334,9 @@ export class ChatGptFolderSection {
     this.body.setAttribute('aria-busy', String(!ready));
     this.activityBody.inert = !ready;
     setFolderHeaderDisabled(this.header, !ready);
-    // The sort and view toggles only change what is shown, so they work while data loads.
-    for (const toggle of [SORT_TOGGLE_CLASS, ACTIVITY_TOGGLE_CLASS]) {
-      const button = this.header.querySelector<HTMLButtonElement>(`.${toggle}`);
-      if (button) button.disabled = false;
-    }
+    // The view toggle only changes what is shown, so it works while data loads.
+    const toggle = this.header.querySelector<HTMLButtonElement>(`.${ACTIVITY_TOGGLE_CLASS}`);
+    if (toggle) toggle.disabled = false;
   }
 
   /** True while the section's own folder menu or name field is open. */
@@ -379,7 +361,7 @@ export class ChatGptFolderSection {
   private site(): TreeSiteOptions {
     return {
       ...SITE,
-      ...searchAndSortOptions(this.searchCriteria() !== null, this.prefs.sortMode),
+      ...searchAndSortOptions(this.searchCriteria() !== null, 'manual'),
       filter: this.filter,
       activeConversationId: this.activeConversationId,
       isConversationSelected: this.isConversationSelected,
@@ -416,32 +398,18 @@ export class ChatGptFolderSection {
   }
 
   private setPrefs(change: Partial<ChatGptFolderSectionPrefs>): void {
-    const sortChanged = change.sortMode !== undefined && change.sortMode !== this.prefs.sortMode;
     const viewChanged = change.viewMode !== undefined && change.viewMode !== this.prefs.viewMode;
     this.prefs = { ...this.prefs, ...change };
     this.showPrefs(viewChanged);
-    if (sortChanged) {
-      this.layoutHeld = false;
-      this.tree.setSite(this.site());
-      this.tree.update(this.data, this.prefs.sortMode);
-    }
     this.onPrefsChange({ ...this.prefs });
   }
 
   /** `redraw`: the view changed, so the tree or the Activity view is shown anew. */
   private showPrefs(redraw = true): void {
-    const { collapsed, sortMode } = this.prefs;
+    const { collapsed } = this.prefs;
     this.content.hidden = collapsed;
     setFolderHeaderCollapsed(this.header, collapsed);
-    const recent = sortMode === 'recent';
     const activity = this.activityMode;
-    setFolderHeaderAction(this.header, SORT_TOGGLE_CLASS, {
-      // Activity has its own order.
-      hidden: activity,
-      pressed: recent,
-      label: t('folder_sort_recent'),
-      title: `${t('folder_sort')}: ${t(recent ? 'folder_sort_recent' : 'folder_sort_manual')}`,
-    });
     setFolderHeaderAction(this.header, ACTIVITY_TOGGLE_CLASS, {
       pressed: activity,
       label: t(activity ? 'folder_activity_turn_off' : 'folder_activity_turn_on'),

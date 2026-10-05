@@ -2637,10 +2637,6 @@
     "message": "現在の会話をここに追加",
     "description": "Floating folder panel folder menu item that files the open conversation into that folder"
   },
-  "chatgptFoldersAddCurrent": {
-    "message": "現在の会話を追加",
-    "description": "ChatGPT folder panel header button that files the open conversation at the top level"
-  },
   "chatgptFoldersHint": {
     "message": "会話を整理するには：会話を開き、ブックマークボタンを押すか、フォルダを右クリックします。",
     "description": "ChatGPT folder panel hint explaining how to file a conversation"

@@ -2637,10 +2637,6 @@
     "message": "أضف المحادثة الحالية هنا",
     "description": "Floating folder panel folder menu item that files the open conversation into that folder"
   },
-  "chatgptFoldersAddCurrent": {
-    "message": "أضف المحادثة الحالية",
-    "description": "ChatGPT folder panel header button that files the open conversation at the top level"
-  },
   "chatgptFoldersHint": {
     "message": "لحفظ محادثة في مجلد: افتحها، ثم انقر زر الإشارة المرجعية أو انقر بزر الفأرة الأيمن على مجلد.",
     "description": "ChatGPT folder panel hint explaining how to file a conversation"

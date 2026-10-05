@@ -5,11 +5,7 @@
  * shared FolderRepository with ChatGPT's own bucket. Everything this plugin
  * creates is registered on its PluginScope, so turning it off leaves nothing behind.
  */
-import {
-  createBookmarkPlusIcon,
-  createDownloadIcon,
-  createUploadIcon,
-} from '@/core/icons/folderIcons';
+import { createDownloadIcon, createUploadIcon } from '@/core/icons/folderIcons';
 import type { ConversationReference } from '@/core/types/folder';
 import { createToaster } from '@/core/ui/toast/toaster';
 import type { ToastTone } from '@/core/ui/toast/types';
@@ -64,7 +60,7 @@ import { findChatGptSidebar } from './chatgptSidebarDom';
 import { ChatGptSidebarWatcher } from './chatgptSidebarWatcher';
 import { ChatGptTitleSync } from './chatgptTitleSync';
 import { CHATGPT_FOLDER_CONFIG } from './config';
-import { BOOKMARK_ADD_PATH, DOWNLOAD_PATH, UPLOAD_PATH } from './icons';
+import { DOWNLOAD_PATH, UPLOAD_PATH } from './icons';
 import { createLegacyChatGptCommands } from './legacyChatGptCommands';
 import { type ChatGptFolderPanelPrefs, loadPanelPrefs, savePanelPrefs } from './panelPrefs';
 import { type ChatGptFolderSectionPrefs, loadSectionPrefs, saveSectionPrefs } from './sectionPrefs';
@@ -161,7 +157,7 @@ class ChatGptFoldersView {
         commands: this.commands,
         rootBucketId,
         feedback,
-        sortMode: () => section.sortMode,
+        sortMode: () => 'manual',
         conversationIdentity: FOLDER_SITE_POLICIES.chatgpt,
         finish: () => selection.finishDrop(),
       };
@@ -196,12 +192,6 @@ class ChatGptFoldersView {
             selection.isFolderConversationSelected(conversation.conversationId, bucketId),
         },
         headerActions: [
-          {
-            className: 'gv-chatgpt-folder-section__add-current',
-            labelKey: 'chatgptFoldersAddCurrent',
-            icon: () => createBookmarkPlusIcon(SECTION_ICON_SIZE),
-            onClick: () => this.addCurrent(CHATGPT_FOLDER_CONFIG.rootBucketId),
-          },
           {
             className: 'gv-chatgpt-folder-section__import',
             labelKey: 'folder_import',
@@ -392,12 +382,6 @@ class ChatGptFoldersView {
       onCloudUpload: () => void uploadChatGptFolders(this.cloudHost),
       onCloudSync: () => void syncChatGptFolders(this.cloudHost),
       headerActions: [
-        {
-          modifier: 'add-current',
-          labelKey: 'chatgptFoldersAddCurrent',
-          iconPath: BOOKMARK_ADD_PATH,
-          onClick: () => this.addCurrent(CHATGPT_FOLDER_CONFIG.rootBucketId),
-        },
         {
           modifier: 'import',
           labelKey: 'folder_import',
