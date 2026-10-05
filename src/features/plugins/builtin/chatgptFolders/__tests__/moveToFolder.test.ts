@@ -169,6 +169,35 @@ describe('"Move to folder" in a sidebar row menu', () => {
     ]);
   });
 
+  it('filing a starred chat into another folder keeps it starred there', async () => {
+    const starred = {
+      conversationId: `chatgpt:conv:${TARGET.id}`,
+      title: TARGET.title,
+      url: `https://chatgpt.com/c/${TARGET.id}`,
+      addedAt: 1,
+      sortIndex: 0,
+      starred: true,
+    };
+    await scope.dispose();
+    memory.values.local.set(StorageKeys.FOLDER_DATA_CHATGPT, {
+      ...structuredClone(DATA),
+      folderContents: { ...DATA.folderContents, f1: [starred] },
+    });
+    scope = new PluginScope();
+    await activateChatGptFolders(scope);
+    await nextPass();
+
+    sidebar.openMenu(TARGET.id);
+    await nextPass();
+    document.querySelector<HTMLElement>(ENTRY)!.click();
+    await nextPass();
+    pick('Trips');
+    await settle(20);
+
+    // The new record holds the star itself, so it outlives Work's copy.
+    expect(stored('f2')).toEqual([expect.objectContaining({ starred: true })]);
+  });
+
   it('is reachable with the arrow keys and opens the picker with Enter', async () => {
     const menu = sidebar.openMenu(TARGET.id);
     await nextPass();

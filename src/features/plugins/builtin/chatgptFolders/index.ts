@@ -162,6 +162,7 @@ class ChatGptFoldersView {
         rootBucketId,
         feedback,
         sortMode: () => section.sortMode,
+        conversationIdentity: FOLDER_SITE_POLICIES.chatgpt,
         finish: () => selection.finishDrop(),
       };
       const section: ChatGptFolderSection = new ChatGptFolderSection({

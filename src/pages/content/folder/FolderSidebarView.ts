@@ -4,6 +4,7 @@ import { StorageKeys } from '@/core/types/common';
 import type { FolderCommands } from '@/features/folder/commands/folderCommands';
 import { ROOT_CONVERSATIONS_ID } from '@/features/folder/constants';
 import type { ConversationSortMode } from '@/features/folder/model/folderData';
+import { FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 
 import type { FolderFeedback } from './FolderFeedback';
 import type { FolderNavigation } from './FolderNavigation';
@@ -81,6 +82,7 @@ export class FolderSidebarView {
       rootBucketId: ROOT_CONVERSATIONS_ID,
       feedback: options.feedback,
       sortMode: () => this.prefs.conversationSortMode,
+      conversationIdentity: FOLDER_SITE_POLICIES.gemini,
       finish: () => options.selection.finishDrop(),
     };
     this.activity = new SidebarActivityList({

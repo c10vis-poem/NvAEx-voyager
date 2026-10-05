@@ -33,9 +33,8 @@ export function readConversationStars(
       if (record.starred) for (const key of identity.keysOf(record)) starredKeys.add(key);
     }
   }
-  return (conversation) => {
-    if (conversation.starred) return true;
-    const key = identity.idKey(conversation.conversationId);
-    return key !== null && starredKeys.has(key);
-  };
+  // Every key, not the id alone: an imported Gemini record keeps a synthetic id
+  // and answers to its chat through the route in its URL.
+  return (conversation) =>
+    !!conversation.starred || identity.keysOf(conversation).some((key) => starredKeys.has(key));
 }

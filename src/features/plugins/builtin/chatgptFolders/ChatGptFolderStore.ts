@@ -1,4 +1,5 @@
 import { MAX_FOLDER_DEPTH } from '@/features/folder/constants';
+import { readConversationStars } from '@/features/folder/model/conversationStars';
 import {
   getFolderDepth,
   moveFolder,
@@ -11,6 +12,7 @@ import {
   type ConversationPlacement,
   placeConversations,
 } from '@/features/folder/model/placeConversations';
+import { FOLDER_SITE_POLICIES } from '@/features/folder/owner/folderOwnerPolicy';
 import { FolderRepository } from '@/pages/content/folder/FolderRepository';
 import { applyNativeTitle } from '@/pages/content/folder/conversationTitleSync';
 import { AIStudioFolderStorageAdapter } from '@/pages/content/folder/storage/AIStudioFolderStorageAdapter';
@@ -158,12 +160,15 @@ export class ChatGptFolderStore {
   }
   /**
    * Moves `ids` from `from` to `index` in `target` (the same bucket reorders),
-   * within their starred group, as Gemini's manual order does.
+   * within their starred group as the tree shows it, as Gemini's manual order does.
    */
   reorderConversations(ids: string[], from: string, target: string, index: number): MoveOutcome {
     if (!this.ready) return 'closed';
     if (!this.hasBucketOwner(target)) return 'missing';
-    return this.replaceIfChanged(reorderConversations(this.data, ids, from, target, index));
+    const starred = readConversationStars(this.data, FOLDER_SITE_POLICIES.chatgpt);
+    return this.replaceIfChanged(
+      reorderConversations(this.data, ids, from, target, index, 'manual', starred),
+    );
   }
   /**
    * Files `conversation` into `target` at `placement`. A picker or menu may still

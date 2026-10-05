@@ -1,5 +1,6 @@
 import type { ConversationReference, Folder, FolderData } from '@/core/types/folder';
 import { MAX_FOLDER_DEPTH } from '@/features/folder/constants';
+import { readConversationStars } from '@/features/folder/model/conversationStars';
 import {
   getFolderAndDescendants,
   getFolderDepth,
@@ -253,6 +254,7 @@ export function applyFolderOp(
           body.target,
           body.index,
           body.sortMode ?? 'manual',
+          readConversationStars(data, policy),
         );
         return next === data ? unchanged(data) : saved(next);
       }
@@ -280,8 +282,9 @@ export function applyFolderOp(
       const source = ownBucket(ensured.folderContents, from) ?? [];
       const ids = body.ids.filter((id) => source.some((c) => c.conversationId === id));
       if (ids.length === 0) return ensured === data ? unchanged(data) : saved(ensured);
+      const starred = readConversationStars(ensured, policy);
       return saved(
-        reorderConversations(ensured, ids, from, body.target, body.index, body.sortMode),
+        reorderConversations(ensured, ids, from, body.target, body.index, body.sortMode, starred),
       );
     }
     case 'removeConversations': {
