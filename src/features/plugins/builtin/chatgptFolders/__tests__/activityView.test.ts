@@ -159,11 +159,41 @@ function exchange(prompt: string): HTMLElement {
   return item;
 }
 
-/** The user presses Enter in the composer, and ChatGPT renders the message. */
-async function send(prompt: string): Promise<void> {
+function pressEnter(): void {
   composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+}
+
+/** The user types `prompt` and presses Enter; ChatGPT clears the composer and renders the message. */
+async function send(prompt: string): Promise<void> {
+  composer.textContent = prompt;
+  pressEnter();
+  composer.textContent = '';
   thread.append(exchange(prompt));
   await nextPass();
+}
+
+/**
+ * ChatGPT naming a new chat: its router pushes `/c/<id>` (no `popstate`, which
+ * only history traversal and in-app link fallbacks fire) while the reply streams in.
+ */
+async function nameNewChat(path: string): Promise<void> {
+  history.pushState(null, '', path);
+  thread.lastElementChild?.append(document.createTextNode(' and more of the answer'));
+  await nextPass();
+}
+
+/** The user clicks a chat in ChatGPT's sidebar; its router pushes the route. */
+function openFromSidebar(id: string): void {
+  const link = document.querySelector<HTMLAnchorElement>(`a[href="/c/${id}"]`)!;
+  link.addEventListener(
+    'click',
+    (event) => {
+      event.preventDefault();
+      history.pushState(null, '', `/c/${id}`);
+    },
+    { once: true },
+  );
+  link.click();
 }
 
 function lastTurnAt(id: string): number | undefined {
@@ -232,11 +262,106 @@ describe('ChatGPT folder Activity', () => {
     expect(lastTurnAt(NEW_CHAT)).toBeUndefined();
 
     vi.setSystemTime(NOON + MINUTE);
-    await route(`/c/${NEW_CHAT}`);
+    await nameNewChat(`/c/${NEW_CHAT}`);
 
     // Stamped with when it was sent, under the route ChatGPT gave it.
     expect(lastTurnAt(NEW_CHAT)).toBe(NOON);
     expect(lastTurnAt(WORK_CHAT)).toBeUndefined();
+  });
+
+  it("opening an old chat right after a new chat's first send does not stamp the old chat", async () => {
+    await activate();
+    await send('A brand-new chat');
+
+    // Before ChatGPT names the new chat, the user opens an old one. Its
+    // transcript has not replaced the outgoing message yet when the page next changes.
+    openFromSidebar(OLD_CHAT);
+    thread.append(document.createElement('div'));
+    await nextPass();
+    thread.replaceChildren(exchange('An old question'));
+    await nextPass();
+
+    expect(lastTurnAt(OLD_CHAT)).toBeUndefined();
+    expect(lastTurnAt(NEW_CHAT)).toBeUndefined();
+  });
+
+  it('an empty Enter in a new chat does not stamp the old chat opened next', async () => {
+    await activate();
+
+    pressEnter();
+    await route(`/c/${OLD_CHAT}`);
+    thread.append(exchange('An old question'));
+    await nextPass();
+
+    expect(lastTurnAt(OLD_CHAT)).toBeUndefined();
+  });
+
+  it('a send after an empty Enter is stamped with its own time', async () => {
+    history.replaceState(null, '', `/c/${WORK_CHAT}`);
+    await activate();
+
+    pressEnter();
+    vi.setSystemTime(NOON + MINUTE);
+    await send('The real prompt');
+
+    expect(lastTurnAt(WORK_CHAT)).toBe(NOON + MINUTE);
+  });
+
+  it('a send in another chat after one ChatGPT never showed is still recorded', async () => {
+    history.replaceState(null, '', `/c/${WORK_CHAT}`);
+    await activate();
+
+    // ChatGPT is still answering, so this Enter sends nothing.
+    composer.textContent = 'Queued while it answers';
+    pressEnter();
+    await route(`/c/${OLD_CHAT}`);
+    vi.setSystemTime(NOON + MINUTE);
+    await send('Picking this back up');
+
+    expect(lastTurnAt(OLD_CHAT)).toBe(NOON + MINUTE);
+    expect(lastTurnAt(WORK_CHAT)).toBeUndefined();
+  });
+
+  it('a send whose older messages load before it shows still records its own turn', async () => {
+    history.replaceState(null, '', `/c/${WORK_CHAT}`);
+    thread.append(exchange('Recent question'));
+    await activate();
+
+    composer.textContent = 'Follow-up';
+    pressEnter();
+    composer.textContent = '';
+    thread.prepend(exchange('An older question'));
+    await nextPass();
+    expect(lastTurnAt(WORK_CHAT)).toBeUndefined();
+
+    thread.append(exchange('Follow-up'));
+    await nextPass();
+    expect(lastTurnAt(WORK_CHAT)).toBe(NOON);
+  });
+
+  it('a message sent while ChatGPT folders are still loading still records its turn time', async () => {
+    history.replaceState(null, '', `/c/${WORK_CHAT}`);
+    const read = memory.api.local.get;
+    let release!: () => void;
+    const loading = new Promise<void>((resolve) => (release = resolve));
+    let folderRead = false;
+    memory.api.local.get = (async (keys: unknown) => {
+      if (keys === KEY) {
+        folderRead = true;
+        await loading;
+      }
+      return read(keys as never);
+    }) as typeof read;
+    const activation = activateChatGptFolders(scope, {}, requireBundledSiteAdapter('chatgpt'));
+    await vi.waitFor(() => expect(folderRead).toBe(true));
+
+    vi.setSystemTime(NOON + MINUTE);
+    await send('Ship while it loads');
+    release();
+    await activation;
+    await nextPass();
+
+    expect(lastTurnAt(WORK_CHAT)).toBe(NOON + MINUTE);
   });
 
   it('temporary chats record nothing', async () => {

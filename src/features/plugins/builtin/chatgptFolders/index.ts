@@ -556,11 +556,22 @@ export async function activateChatGptFolders(
   const turnSelectors = turnSelectorsOf(adapter);
   view.start(sectionPrefs, turnSelectors !== null);
   if (turnSelectors) {
+    // A send seen while the stored folders still load waits for them; the store
+    // refuses edits until then, and the tracker has already let the send go.
+    const waiting = new Map<string, number>();
+    const flush = (): void => {
+      if (!store.ready || waiting.size === 0) return;
+      const entries = Array.from(waiting, ([conversationId, lastTurnAt]) => ({
+        conversationId,
+        lastTurnAt,
+      }));
+      waiting.clear();
+      void commands.run({ kind: 'setConversationActivity', entries });
+    };
+    scope.effect(() => store.subscribe(flush), 'chatgpt-folders:activity-wait');
     trackChatGptLastTurn(scope, turnSelectors, (conversationId, lastTurnAt) => {
-      void commands.run({
-        kind: 'setConversationActivity',
-        entries: [{ conversationId, lastTurnAt }],
-      });
+      waiting.set(conversationId, Math.max(lastTurnAt, waiting.get(conversationId) ?? 0));
+      flush();
     });
   }
   const sidebar = new ChatGptSidebarWatcher(scope);

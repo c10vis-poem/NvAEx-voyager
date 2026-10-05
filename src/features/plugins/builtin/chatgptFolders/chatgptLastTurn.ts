@@ -4,22 +4,27 @@
  * re-rendering its transcript or loading older messages never stamps a time.
  *
  * A send is a submit from ChatGPT's composer (Enter, its send button or the
- * form). It is stamped once the message it produced shows up as the newest
- * user turn, under the conversation's stored id: a new chat has no id until
- * ChatGPT gives it a `/c/<id>` route, so its first message waits for that
- * route. Temporary chats record nothing.
+ * form) with a prompt or a file in it. It is stamped once the message it
+ * produced shows up as the newest user turn, under the conversation's stored
+ * id: a new chat has no id until ChatGPT gives it a `/c/<id>` route, so its
+ * first message waits for that route. Leaving the chat, or opening another one
+ * before a new chat is named, forgets the send. Temporary chats record nothing.
  */
 import type { PluginScope } from '@/features/plugins/runtime/pluginScope';
 import { isSendActionButton } from '@/pages/content/sendBehavior/sendButton';
-import { watchRouteChanges } from '@/pages/content/utils/routeWatcher';
+import { type RouteChange, watchRouteChanges } from '@/pages/content/utils/routeWatcher';
 
+import {
+  hasComposerAttachments,
+  readComposerText,
+} from '../chatgptTemporaryHandoff/composerDelivery';
 import { isTemporaryChat } from '../chatgptTemporaryHandoff/handoff';
 import { readChatGptConversation } from './chatgptIdentity';
 
 /** The site adapter's selectors for a user message and the prompt field. */
 export type ChatGptTurnSelectors = { readonly userTurn: string; readonly composer: string };
 
-/** A send whose message never showed up (an empty prompt, say) is forgotten after this. */
+/** A send whose message never showed up (ChatGPT was still answering, say) is forgotten after this. */
 const PENDING_SEND_MS = 30_000;
 /**
  * What keeps one user message's identity across re-renders and remounts: its
@@ -54,11 +59,15 @@ export function trackChatGptLastTurn(
   doc: Document = document,
 ): void {
   let pending: PendingSend | null = null;
+  /** Set while one submission's events arrive: its Enter or click, then its form's submit. */
+  let submitting = false;
 
   const turnKeys = (): string[] =>
     Array.from(doc.querySelectorAll(selectors.userTurn), turnKeyOf).filter(
       (key): key is string => key !== null,
     );
+  const routeConversation = (): string | null =>
+    readChatGptConversation(location.href)?.conversationId ?? null;
 
   const forget = (): void => {
     pending?.stop();
@@ -77,7 +86,7 @@ export function trackChatGptLastTurn(
       // The page moved on to another chat before the route bound this one.
       return;
     }
-    const conversationId = readChatGptConversation(location.href)?.conversationId ?? null;
+    const conversationId = routeConversation();
     if (!conversationId) return;
     if (pending.conversationId !== null && pending.conversationId !== conversationId) {
       forget();
@@ -88,30 +97,53 @@ export function trackChatGptLastTurn(
     record(conversationId, sentAt);
   };
 
-  const onSend = (): void => {
-    // The button's click and its form's submit are one send.
-    if (scope.isDisposed || pending?.turn === null || isTemporaryChat()) return;
+  const onRoute = ({ trigger }: RouteChange): void => {
+    if (!pending) return;
+    // Only ChatGPT naming a new chat moves its route; going back or forward is
+    // the user leaving, and that chat's old turns would take the send's place.
+    const left =
+      pending.conversationId === null
+        ? trigger === 'popstate'
+        : routeConversation() !== pending.conversationId;
+    if (left) forget();
+    else check();
+  };
+
+  /** Whether a submit carries a prompt or a file; ChatGPT sends nothing from an empty composer. */
+  const hasDraft = (fields: readonly Element[], form: Element | null): boolean =>
+    fields.some((field) => field instanceof HTMLElement && readComposerText(field).trim() !== '') ||
+    (form !== null && hasComposerAttachments(form));
+
+  const onSend = (fields: readonly Element[], form: Element | null): void => {
+    if (scope.isDisposed || submitting || isTemporaryChat()) return;
+    // An empty submit sends nothing; armed, it would claim whichever chat's turn mounted next.
+    if (!hasDraft(fields, form)) return;
+    // One submission dispatches its events in one task; a later send is its own, with its own time.
+    submitting = true;
+    scope.timer(() => (submitting = false), 0);
     forget();
     const disposers = [
       scope.observe(doc.body, { childList: true, subtree: true }, check),
-      scope.effect(() => watchRouteChanges(check), 'chatgpt-folders:last-turn-route'),
+      scope.effect(() => watchRouteChanges(onRoute), 'chatgpt-folders:last-turn-route'),
       scope.timer(forget, PENDING_SEND_MS),
     ];
     pending = {
       sentAt: Date.now(),
-      conversationId: readChatGptConversation(location.href)?.conversationId ?? null,
+      conversationId: routeConversation(),
       known: new Set(turnKeys()),
       turn: null,
       stop: () => disposers.forEach((dispose) => void dispose()),
     };
   };
 
-  const fromComposer = (target: EventTarget | null): boolean =>
-    target instanceof Element && target.closest(selectors.composer) !== null;
   const composerForm = (target: Element): HTMLFormElement | null => {
     const form = target.closest('form');
     return form?.querySelector(selectors.composer) ? form : null;
   };
+  const sendFrom = (form: HTMLFormElement): void =>
+    onSend(Array.from(form.querySelectorAll(selectors.composer)), form);
+  const isLink = (target: EventTarget): boolean =>
+    target instanceof HTMLAnchorElement && target.hasAttribute('href');
 
   // Capture phase: these run before ChatGPT handles the send and renders its message.
   scope.on(
@@ -119,7 +151,9 @@ export function trackChatGptLastTurn(
     'keydown',
     (event) => {
       if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
-      if (fromComposer(event.target)) onSend();
+      const field =
+        event.target instanceof Element ? event.target.closest(selectors.composer) : null;
+      if (field) onSend([field], field.closest('form'));
     },
     { capture: true },
   );
@@ -127,9 +161,12 @@ export function trackChatGptLastTurn(
     doc,
     'click',
     (event) => {
+      // Opening a chat before a new chat is named: the next route is that chat's.
+      if (pending?.conversationId === null && event.composedPath().some(isLink)) forget();
       const button = event.target instanceof Element ? event.target.closest('button') : null;
-      if (!button || button.disabled || !composerForm(button)) return;
-      if (isSendActionButton(button)) onSend();
+      if (!button || button.disabled || !isSendActionButton(button)) return;
+      const form = composerForm(button);
+      if (form) sendFrom(form);
     },
     { capture: true },
   );
@@ -137,7 +174,8 @@ export function trackChatGptLastTurn(
     doc,
     'submit',
     (event) => {
-      if (event.target instanceof Element && composerForm(event.target)) onSend();
+      const form = event.target instanceof Element ? composerForm(event.target) : null;
+      if (form) sendFrom(form);
     },
     { capture: true },
   );
