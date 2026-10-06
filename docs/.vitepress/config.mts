@@ -78,7 +78,7 @@ export default defineConfig({
     }
     head.push([
       'link',
-      { rel: 'alternate', hreflang: 'x-default', href: `${siteUrl}/${basePath}` },
+      { rel: 'alternate', hreflang: 'x-default', href: `${siteUrl}/en/${basePath}` },
     ]);
 
     return head;
